@@ -14,8 +14,8 @@ process HIERARCHICAL_HOTNET_INPUT_PARSER {
     
     script:
     """
-    cat "/Users/motan/Research/tum/diseasemodulediscovery/work/0e/4c21176797e8316a49bd88deea8cef/network_1_edge_list.tsv" > "${meta.id}.edge_list.tsv"
-    cat "/Users/motan/Research/tum/diseasemodulediscovery/work/0e/4c21176797e8316a49bd88deea8cef/network_1_index_gene.tsv" > "${meta.id}.node_list.tsv"
+    cat "../../../tests/network_1_edge_list.tsv" > "${meta.id}.edge_list.tsv"
+    cat "../../../tests/network_1_index_gene.tsv" > "${meta.id}.node_list.tsv"
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         python: \$(python --version | sed 's/Python //g')

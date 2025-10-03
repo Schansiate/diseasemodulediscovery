@@ -12,6 +12,6 @@ process HIERARCHICAL_HOTNET_SCORE_PARSER {
 
     script:
     """
-    cat "/Users/motan/Research/tum/diseasemodulediscovery/work/0e/4c21176797e8316a49bd88deea8cef/scores_1.tsv" > "${meta.id}.node_scores.tsv"
+    cat "../../../tests/scores_1.tsv" > "${meta.id}.node_scores.tsv"
     """
 }

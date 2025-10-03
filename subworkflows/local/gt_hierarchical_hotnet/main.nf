@@ -30,7 +30,7 @@ workflow GT_HIERARCHICAL_HOTNET {
         .map{ meta, node_list, edge_list -> [meta, node_list, edge_list]} 
         .join(HIERARCHICAL_HOTNET_SCORE_PARSER.out)
     HIERARCHICAL_HOTNET_PERMUTE_SCORES(ch_permutation_input)
-    HIERARCHICAL_HOTNET_PERMUTE_SCORES.out.permuted_scores.view()
+    HIERARCHICAL_HOTNET_PERMUTE_SCORES.out.permuted_scores
     ch_parsed_inputs = ch_parsed_inputs
         .map{ meta, node_list, edge_list -> [meta, node_list, edge_list]}
         .join(HIERARCHICAL_HOTNET_CONSTRUCT_SIMILARITY_MATRIX.out.similarity_matrix)
@@ -55,7 +55,6 @@ workflow GT_HIERARCHICAL_HOTNET {
     PERMUTED_HIERARCHIES.out.hierarchy.groupTuple()
     ch_hierarchies = HIERARCHICAL_HOTNET_CONSTRUCT_HIERARCHIES.out.hierarchy
         .join(PERMUTED_HIERARCHIES.out.hierarchy.groupTuple())
-        
     HIERARCHICAL_HOTNET_PROCESS_HIERARCHIES(ch_hierarchies)
     HIERARCHICAL_HOTNET_PROCESS_HIERARCHIES.out.modules.view()
     emit:
