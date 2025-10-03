@@ -13,7 +13,7 @@ process HIERARCHICAL_HOTNET_PERMUTE_SCORES {
 
     script:
     """
-    python /tmp/hierarchical-hotnet/src/find_permutation_bins.py \
+    python /hierarchical-hotnet/src/find_permutation_bins.py \
         -gsf ${node_scores} \
         -igf ${node_list} \
         -elf ${edge_list} \
@@ -21,11 +21,11 @@ process HIERARCHICAL_HOTNET_PERMUTE_SCORES {
 
     for i in \$(seq 1 4)
     do
-        python /tmp/hierarchical-hotnet/src/permute_scores.py \
+        python /hierarchical-hotnet/src/permute_scores.py \
             -i ${node_scores} \
             -bf ${meta.id}.score_bins.tsv \
             -s "\$i" \
-            -o ${meta.id}.score_permutation_\$i.tsv
+            -o ${meta.id}.score_permutation.\$i.tsv
     done
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

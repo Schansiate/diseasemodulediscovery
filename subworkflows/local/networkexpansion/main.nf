@@ -70,7 +70,7 @@ workflow NETWORKEXPANSION {
     }
 
     if(!params.skip_hierarchical_hotnet){
-        GT_HIERARCHICAL_HOTNET(ch_seeds, ch_network)
+        GT_HIERARCHICAL_HOTNET(ch_network)
         ch_versions = ch_versions.mix(GT_HIERARCHICAL_HOTNET.out.versions)
         ch_raw_modules = ch_raw_modules.mix(GT_HIERARCHICAL_HOTNET.out.module)
     }

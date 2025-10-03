@@ -3,7 +3,7 @@ process HIERARCHICAL_HOTNET_SCORE_PARSER {
     label 'process_single'
 
     input:
-    tuple val(meta), path(seeds), path(node_list)
+    tuple val(meta),  path(node_list)
     output:
     tuple val(meta), path("*.node_scores.tsv")
 
@@ -12,6 +12,6 @@ process HIERARCHICAL_HOTNET_SCORE_PARSER {
 
     script:
     """
-    awk 'NR==FNR{a[\$1]=1; next} {print \$2"\t"(a[\$2]?1:0.5)}' "${seeds}" "${node_list}" > "${meta.id}.node_scores.tsv"
+    cat "/Users/motan/Research/tum/diseasemodulediscovery/work/0e/4c21176797e8316a49bd88deea8cef/scores_1.tsv" > "${meta.id}.node_scores.tsv"
     """
 }
