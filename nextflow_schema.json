@@ -478,5 +478,11 @@
         {
             "$ref": "#/$defs/generic_options"
         }
-    ]
+    ],
+    "properties": {
+        "tissue": {
+            "type": "string",
+            "description": "tissues to filter for"
+        }
+    }
 }
