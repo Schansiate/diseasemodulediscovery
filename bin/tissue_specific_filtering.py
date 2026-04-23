@@ -27,7 +27,9 @@ def parse_args(argv=None):
                         help="path to the expression file")
     return parser.parse_args(argv)
 
-def filter_network_by_tissue(network, stem, tissues, expression_file, threshold):
+def filter_network_by_tissue(network_file, tissues, expression_file, threshold):
+    network = gt.load_graph(network_file)
+    stem = Path(network_file).stem
     name_index = utils.name2index(network)
     expression_by_tissue = pd.read_csv(expression_file, sep="\t", skiprows=2, header = 0)
     expression_by_tissue["Name"] = expression_by_tissue["Name"].apply(lambda x: x.split(".")[0])
@@ -45,9 +47,7 @@ def filter_network_by_tissue(network, stem, tissues, expression_file, threshold)
 
 def main(argv=None):
     args = parse_args(argv)
-    network = gt.load_graph(args.network)
-    stem = Path(args.network).stem
-    filter_network_by_tissue(network, stem,args.tissues, args.expression_file, args.threshold)
+    filter_network_by_tissue(args.network ,args.tissues, args.expression_file, args.threshold)
 
 if __name__ == "__main__":
     sys.exit(main())
