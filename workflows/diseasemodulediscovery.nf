@@ -143,6 +143,40 @@ workflow DISEASEMODULEDISCOVERY {
     ch_versions = ch_versions.mix(GRAPHTOOLPARSER.out.versions)
     ch_network_multiqc = GRAPHTOOLPARSER.out.multiqc
         .map{ meta, path -> path }
+    ch_network_gt = GRAPHTOOLPARSER.out.network
+    //Tissue specific filtering 
+    if (params.tissues != null){
+        ch_tissue_specific_seeds = ch_seeds
+            .combine(params.tissues.split(','))
+            .map{meta, seeds, tissue ->
+                def dup = meta.clone()
+                dup.id = meta.id + "." + tissue
+                dup.network_id = meta.network_id + "." + tissue
+                [dup, seeds]
+            }
+        ch_tissue_specific_filtering_input = ch_network_gt
+            .combine(channel.of(params.tissues.split(',')))
+            .map{meta, network, tissue -> 
+                def dup = meta.clone()
+                dup.id = meta.id + "." + tissue
+                dup.network_id = meta.network_id + "." + tissue
+                [dup, network, tissue]}
+        TISSUE_SPECIFIC_FILTERING(ch_tissue_specific_filtering_input,
+                                 "https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz")
+        ch_versions = ch_versions.mix(TISSUE_SPECIFIC_FILTERING.out.versions)
+        ch_tissue_specific_networks = TISSUE_SPECIFIC_FILTERING.out.filtered_networks
+        if(params.run_filtered_networks_only){
+            ch_network_gt = ch_tissue_specific_networks
+            ch_seeds = ch_tissue_specific_seeds
+            ch_network_multiqc = TISSUE_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path }
+        }else{
+            ch_network_gt = ch_network_gt.mix(ch_tissue_specific_networks)
+            ch_seeds = ch_seeds.mix(ch_tissue_specific_seeds)
+            ch_network_multiqc = ch_network_multiqc.mix(TISSUE_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path })   
+        }
+    }
+
+    ch_network_multiqc = ch_network_multiqc
         .collectFile(
             cache: false,
             storeDir: "${params.outdir}/mqc_summaries",
@@ -150,32 +184,7 @@ workflow DISEASEMODULEDISCOVERY {
             keepHeader: true
         )
     ch_multiqc_files = ch_multiqc_files.mix(ch_network_multiqc)
-    ch_network_gt = GRAPHTOOLPARSER.out.network
-    if (params.tissues != null){
-        TISSUE_SPECIFIC_FILTERING(ch_network_gt,
-                                 "$projectDir/assets/expression_by_tissue.gct",
-                                 params.tissues
-                                 )
-        ch_versions = ch_versions.mix(TISSUE_SPECIFIC_FILTERING.out.versions)
-        ch_filtered_networks = TISSUE_SPECIFIC_FILTERING.out.filtered_networks
-            .flatMap { network_meta, tissue_files ->
-                tissue_files.collect { tissue_file ->
-            // extract tissue name from filename, e.g. "string..._Bladder_specific.gt" -> "Bladder_specific"
-                    def tissue = tissue_file.baseName.replace(network_meta.network_id + '_', '')
-                    def new_id = "${network_meta.network_id}_${tissue}"
-                    def new_meta = [id: new_id, network_id: new_id]
-                    [ new_meta, tissue_file ]
-                }
-            }
-        ch_network_gt = ch_network_gt.mix(ch_filtered_networks)
-        ch_seeds = ch_seeds
-            .combine(ch_network_gt.map{meta, _network -> meta.network_id})
-            .map{ meta, seeds, network_id -> 
-                def new_id = meta.seeds_id + "." + network_id
-                def new_meta = [id: new_id, seeds_id: meta.seeds_id, network_id: network_id]
-                [new_meta, seeds]
-            }
-    }
+    
     // Check input
     // channel: [ val(meta[id,seeds_id,network_id]), path(seeds), path(network) ]
     ch_seeds_network = ch_seeds
