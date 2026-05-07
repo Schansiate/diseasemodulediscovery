@@ -480,7 +480,11 @@
         }
     ],
     "properties": {
-        "tissue": {
+        "run_filtered_networks_only": {
+            "type": "boolean",
+            "description": "flag for running network expansion tools on filtered networks only"
+        },
+        "tissues": {
             "type": "string",
             "description": "tissues to filter for"
         }
