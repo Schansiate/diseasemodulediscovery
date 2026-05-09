@@ -72,11 +72,15 @@ def filter_network(network_file, threshold, expression_by_tissue, tissue):
     tissue_specific_genes = expression_by_tissue[expression_by_tissue["expression"] > threshold]
     in_network_tissue_genes = tissue_specific_genes[tissue_specific_genes["Name"].isin(name_index.keys())].copy()
     in_network_tissue_genes["vertex_id"] = in_network_tissue_genes["Name"].map(name_index)
-    tissue_filter = network.new_vertex_property("bool")
-    tissue_filter.a[in_network_tissue_genes["vertex_id"]] = True
-    network.set_vertex_filter(tissue_filter)
-    tissue_specific_graph = gt.GraphView(network, vfilt=tissue_filter)
-    tissue_specific_graph.save(f"{stem}.{tissue}.gt")
+    tissue_filter = f"{tissue}_filter"
+    network.vp[tissue_filter] = network.new_vertex_property("bool")
+    for vertex_id in in_network_tissue_genes["vertex_id"].unique():
+        network.vp[tissue_filter][vertex_id] = True
+    network.set_vertex_filter(network.vp[tissue_filter])
+    network.purge_vertices()
+    network.clear_filters()
+    del network.vp[tissue_filter]
+    network.save(f"{stem}.{tissue}.gt")
 
 
 
