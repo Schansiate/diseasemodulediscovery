@@ -164,10 +164,14 @@ workflow DISEASEMODULEDISCOVERY {
             ch_network_gt = ch_tissue_specific_networks
             ch_seeds = ch_tissue_specific_seeds
             ch_network_multiqc = TISSUE_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path }
+            ch_perturbed_networks = ch_tissue_specific_networks.map{meta, _path -> [meta, []]}
+            ch_shortest_paths = ch_tissue_specific_networks.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]}
         }else{
             ch_network_gt = ch_network_gt.mix(ch_tissue_specific_networks)
             ch_seeds = ch_seeds.mix(ch_tissue_specific_seeds)
             ch_network_multiqc = ch_network_multiqc.mix(TISSUE_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path })   
+            ch_perturbed_networks = ch_perturbed_networks.mix(ch_tissue_specific_networks.map{meta, _path -> [meta, []]})
+            ch_shortest_paths = ch_shortest_paths.mix(ch_tissue_specific_networks.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]})
         }
     }
 
