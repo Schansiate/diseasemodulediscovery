@@ -144,9 +144,9 @@ workflow DISEASEMODULEDISCOVERY {
         .map{ meta, path -> path }
     ch_network_gt = GRAPHTOOLPARSER.out.network
     //Tissue specific filtering 
-    if (params.tissues != null){
+    if (params.tissue != null){
         ch_tissue_specific_seeds = ch_seeds
-            .combine(params.tissues.split(','))
+            .combine(params.tissue.split(','))
             .map{meta, seeds, tissue ->
                 def dup = meta.clone()
                 dup.id = meta.id + "." + tissue
@@ -154,7 +154,7 @@ workflow DISEASEMODULEDISCOVERY {
                 [dup, seeds]
             }
         ch_tissue_specific_filtering_input = ch_network_gt
-            .combine(channel.of(params.tissues.split(',')))
+            .combine(channel.of(params.tissue.split(',')))
             .map{meta, network, tissue -> 
                 def dup = meta.clone()
                 dup.id = meta.id + "." + tissue
