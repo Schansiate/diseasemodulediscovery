@@ -164,6 +164,15 @@ workflow DISEASEMODULEDISCOVERY {
                                  "https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz")
         ch_versions = ch_versions.mix(TISSUE_SPECIFIC_FILTERING.out.versions)
         ch_tissue_specific_networks = TISSUE_SPECIFIC_FILTERING.out.filtered_networks
+        ch_filtering_statistic = TISSUE_SPECIFIC_FILTERING.out.filtering_statistic
+            .map({ meta, path -> path })
+            .collectFile(
+                cache: false,
+                storeDir: "${params.outdir}/mqc_summaries",
+                name: 'filtering_statistics_mqc.tsv',
+                keepHeader: true
+            )
+        ch_multiqc_files = ch_multiqc_files.mix(ch_filtering_statistic)
         if(params.run_filtered_networks_only){
             ch_network_gt = ch_tissue_specific_networks
             ch_seeds = ch_tissue_specific_seeds
