@@ -15,8 +15,6 @@ workflow GT_PROXIMITY {
 
     // Join shortest path with network and branch based on whether the shortest paths have already been computed
     // channel: [ val(meta[id,network_id]), path(network), path(sp) ]
-    ch_network.view()
-    ch_shortest_paths.view()
     ch_shortest_paths = ch_network
         .join(ch_shortest_paths, failOnMismatch: true, failOnDuplicate: true)
         .branch{

@@ -7,9 +7,6 @@ import pandas as pd
 import graph_tool.all as gt 
 import util as utils 
 from gprofiler import GProfiler 
-import logging 
-
-logger = logging.getLogger()
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="filter network by tissue specific expression")
@@ -38,7 +35,7 @@ def parse_args(argv=None):
 def convert_id_space(expression_df, id_space):
     ids = expression_df["Name"]
     if id_space == "ensembl": 
-        return expression_df
+        return expression_df, 0
     elif id_space == "entrez":
         targetSpace = "ENTREZGENE_ACC"
     elif id_space == "uniprot":
@@ -47,8 +44,7 @@ def convert_id_space(expression_df, id_space):
         raise ValueError(f"Unsupported id_space: {id_space}")
     gp = GProfiler(return_dataframe=True)
     query_result = gp.convert(organism="hsapiens", query=ids.tolist(),target_namespace=targetSpace)
-    #TODO: add loggin of not found ids 
-    not_found = query_result.loc[query_result["converted"].astype(str) == "None", "incoming"].nunique()
+    not_found = query_result.loc[query_result["converted"].astype(str) == "None", "incoming"].shape[0] / expression_df.shape[0]
     query_result = query_result.merge(expression_df, left_on="incoming", right_on="Name")
     query_result = query_result[["incoming", "converted", "expression"]]
     collapsed_result = (
@@ -61,7 +57,7 @@ def convert_id_space(expression_df, id_space):
         })
     )
     collapsed_result = collapsed_result.rename(columns={"converted": "Name"})
-    return collapsed_result
+    return collapsed_result, not_found
 
 
 
@@ -71,6 +67,7 @@ def filter_network(network_file, threshold, expression_by_tissue, tissue):
     name_index = utils.name2index(network)
     tissue_specific_genes = expression_by_tissue[expression_by_tissue["expression"] > threshold]
     in_network_tissue_genes = tissue_specific_genes[tissue_specific_genes["Name"].isin(name_index.keys())].copy()
+    not_in_network = tissue_specific_genes.loc[~tissue_specific_genes["Name"].isin(name_index.keys())].shape[0]
     in_network_tissue_genes["vertex_id"] = in_network_tissue_genes["Name"].map(name_index)
     tissue_filter = f"{tissue}_filter"
     network.vp[tissue_filter] = network.new_vertex_property("bool")
@@ -81,6 +78,8 @@ def filter_network(network_file, threshold, expression_by_tissue, tissue):
     network.clear_filters()
     del network.vp[tissue_filter]
     network.save(f"{stem}.{tissue}.gt")
+    
+    return tissue_specific_genes.shape[0], not_in_network
 
 
 
@@ -95,10 +94,11 @@ def main(argv=None):
     expression_by_tissue = expression_by_tissue[["Name", args.tissue]]
     expression_by_tissue = expression_by_tissue.rename(columns={args.tissue: "expression"})
     #map gene_ids to the specified id space 
-    expression_by_tissue = convert_id_space(expression_by_tissue, args.id_space)
+    expression_by_tissue, n_not_mapped = convert_id_space(expression_by_tissue, args.id_space)
     #filter network by tissue specific expression with the given threshold 
-    print(expression_by_tissue.head())
-    filter_network(args.network ,args.threshold, expression_by_tissue, args.tissue)
-
+    n_genes_in_tissue, n_not_in_network =filter_network(args.network ,args.threshold, expression_by_tissue, args.tissue)
+    with open("filtering_statistic.tsv", "w") as f:
+        f.write("tissue\tpercent_genes_not_mapped\tgenes_in_tissue\tgenes_filtered_out\n")
+        f.write(f"<a href=https://gtexportal.org/home/tissue/{args.tissue}>{args.tissue}</a>\t{n_not_mapped}\t{n_genes_in_tissue}\t{n_not_in_network}\n")
 if __name__ == "__main__":
     sys.exit(main())

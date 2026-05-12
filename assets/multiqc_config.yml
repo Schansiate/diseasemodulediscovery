@@ -25,7 +25,7 @@ custom_content:
     - input
     - input_seeds
     - input_network
-    - network_node_degree_distribution
+    - filtering_statistics
     - drugstone_link
     - overlap
     - jaccard_similarity
@@ -192,6 +192,30 @@ custom_data:
         title: "Duplicate edges"
         description: "Number of duplicate edges, e.g. (A, B) and (B, A)"
         format: "{:.0f}"
+  filtering_statistics:
+    parent_id: input
+    parent_name: "Input"
+    section_name: "Filtering Statistics"
+    plot_type: "table"
+    pconfig:
+      title: "Filtering statistics"
+    headers:
+      tissue:
+        title: "Tissue"
+        description: "Tissue used for filtering the network"
+      percent_genes_not_mapped:
+        title: "percent of genes not mapped"
+        description: "Percentage of genes that could not be mapped to the specified id_space"
+        format: "{:.1%}"
+      genes_in_tissue:
+        title: "Genes in tissue"
+        description: "Number of genes expressed in the tissue above the specified threshold"
+        format: "{:.0f}"
+      genes_filtered_out:
+        title: "Genes not in network"
+        description: "Number of genes that are in the tissue but not in the network"
+        format: "{:.0f}"
+
   digest_reference_free:
     section_name: "DIGEST (reference-free)"
     description: "Empirical -log10 p-values for functional coherence within the module. Calculated with
