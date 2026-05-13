@@ -203,17 +203,17 @@ custom_data:
       tissue:
         title: "Tissue"
         description: "Tissue used for filtering the network"
-      percent_genes_not_mapped:
-        title: "percent of genes not mapped"
-        description: "Percentage of genes that could not be mapped to the specified id_space"
-        format: "{:.1%}"
       genes_in_tissue:
         title: "Genes in tissue"
         description: "Number of genes expressed in the tissue above the specified threshold"
         format: "{:.0f}"
-      genes_filtered_out:
+      genes_not_in_network:
         title: "Genes not in network"
         description: "Number of genes that are in the tissue but not in the network"
+        format: "{:.0f}"
+      in_network_filtered_genes:
+        title: "In network filtered genes"
+        description: "Number of genes that are in the network and filtered out"
         format: "{:.0f}"
 
   digest_reference_free:
