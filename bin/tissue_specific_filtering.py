@@ -59,28 +59,36 @@ def convert_id_space(expression_df, id_space):
     collapsed_result = collapsed_result.rename(columns={"converted": "Name"})
     return collapsed_result
 
-
-
 def filter_network(network_file, threshold, expression_by_tissue, tissue):
     network = gt.load_graph(network_file)
     stem = Path(network_file).stem
     name_index = utils.name2index(network)
-    tissue_specific_genes = expression_by_tissue[expression_by_tissue["expression"] > threshold]
-    in_network_tissue_genes = tissue_specific_genes[tissue_specific_genes["Name"].isin(name_index.keys())].copy()
-    not_in_network = tissue_specific_genes.loc[~tissue_specific_genes["Name"].isin(name_index.keys())].shape[0]
-    in_network_tissue_genes["vertex_id"] = in_network_tissue_genes["Name"].map(name_index)
+    network_num_vertices = network.num_vertices()
+    expression_num_entries = expression_by_tissue.shape[0]
+    in_network_expression = expression_by_tissue[expression_by_tissue["Name"].isin(name_index.keys())].copy()
+    genes_not_in_network = expression_num_entries - in_network_expression.shape[0]
+    genes_not_in_expression_file = network_num_vertices - in_network_expression["Name"].nunique()
+    tissue_specific_in_network = in_network_expression[in_network_expression["expression"] > threshold].copy()
+    genes_filtered_by_threshold = in_network_expression.shape[0] - tissue_specific_in_network.shape[0]
+    tissue_specific_in_network["vertex_id"] = tissue_specific_in_network["Name"].map(name_index)
     tissue_filter = f"{tissue}_filter"
     network.vp[tissue_filter] = network.new_vertex_property("bool")
-    for vertex_id in in_network_tissue_genes["vertex_id"].unique():
+    for vertex_id in tissue_specific_in_network["vertex_id"].unique():
         network.vp[tissue_filter][vertex_id] = True
-    in_Network_filtered_genes = network.num_vertices() - len(in_network_tissue_genes["vertex_id"].unique())
     network.set_vertex_filter(network.vp[tissue_filter])
     network.purge_vertices()
     network.clear_filters()
     del network.vp[tissue_filter]
     network.save(f"{stem}.{tissue}.gt")
     
-    return tissue_specific_genes.shape[0], not_in_network, in_Network_filtered_genes
+    return {
+        "genes_not_in_network_absolute": genes_not_in_network,
+        "genes_not_in_network_relative": genes_not_in_network / expression_num_entries if expression_num_entries else 0.0,
+        "genes_not_in_expression_file_absolute": genes_not_in_expression_file,
+        "genes_not_in_expression_file_relative": genes_not_in_expression_file / network_num_vertices if network_num_vertices else 0.0,
+        "genes_filtered_by_threshold_absolute": genes_filtered_by_threshold,
+        "genes_filtered_by_threshold_relative": genes_filtered_by_threshold / network_num_vertices if network_num_vertices else 0.0,
+    }
 
 
 
@@ -96,10 +104,21 @@ def main(argv=None):
     expression_by_tissue = expression_by_tissue.rename(columns={args.tissue: "expression"})
     #map gene_ids to the specified id space 
     expression_by_tissue = convert_id_space(expression_by_tissue, args.id_space)
-    #filter network by tissue specific expression with the given threshold 
-    n_genes_in_tissue, n_not_in_network, in_Network_filtered_genes = filter_network(args.network ,args.threshold, expression_by_tissue, args.tissue)
+    n_genes_in_tissue = expression_by_tissue[expression_by_tissue["expression"] > args.threshold].shape[0]
+    #filter network by tissue specific expression with the given threshold
+    filtering_statistics = filter_network(args.network, args.threshold, expression_by_tissue, args.tissue)
     with open("filtering_statistic.tsv", "w") as f:
-        f.write("tissue\tgenes_in_tissue\tgenes_not_in_network\tin_network_filtered_genes\n")
-        f.write(f"<a href=https://gtexportal.org/home/tissue/{args.tissue}>{args.tissue}</a>\t{n_genes_in_tissue}\t{n_not_in_network}\t{in_Network_filtered_genes}\n")
+        f.write(
+            "network\ttissue\tgenes_in_tissue\t"
+            "genes_not_in_network_absolute\tgenes_not_in_network_relative\t"
+            "genes_not_in_expression_file_absolute\tgenes_not_in_expression_file_relative\t"
+            "genes_filtered_by_threshold_absolute\tgenes_filtered_by_threshold_relative\n"
+        )
+        f.write(
+            f"{Path(args.network).stem}.{args.tissue}\t<a href=https://gtexportal.org/home/tissue/{args.tissue}>{args.tissue}</a>\t{n_genes_in_tissue}\t"
+            f"{filtering_statistics['genes_not_in_network_absolute']}\t{filtering_statistics['genes_not_in_network_relative']}\t"
+            f"{filtering_statistics['genes_not_in_expression_file_absolute']}\t{filtering_statistics['genes_not_in_expression_file_relative']}\t"
+            f"{filtering_statistics['genes_filtered_by_threshold_absolute']}\t{filtering_statistics['genes_filtered_by_threshold_relative']}\n"
+        )
 if __name__ == "__main__":
     sys.exit(main())

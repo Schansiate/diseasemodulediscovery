@@ -200,21 +200,43 @@ custom_data:
     pconfig:
       title: "Filtering statistics"
     headers:
+      network:
+        title: "Network"
+        description: "Input network that was filtered for this tissue."
       tissue:
         title: "Tissue"
-        description: "Tissue used for filtering the network"
+        description: "GTEx tissue used for filtering the network."
       genes_in_tissue:
         title: "Genes in tissue"
-        description: "Number of genes expressed in the tissue above the specified threshold"
+        description: "Number of genes in the expression file with expression above the specified threshold."
         format: "{:.0f}"
-      genes_not_in_network:
+      genes_not_in_network_absolute:
         title: "Genes not in network"
-        description: "Number of genes that are in the tissue but not in the network"
+        description: "Number of genes from the expression file that are not present in the network."
         format: "{:.0f}"
-      in_network_filtered_genes:
-        title: "In network filtered genes"
-        description: "Number of genes that are in the network and filtered out"
+        hidden: true
+      genes_not_in_network_relative:
+        title: "Genes not in network (%)"
+        description: "Fraction of genes from the expression file that are not present in the network."
+        format: "{:.1%}"
+      genes_not_in_expression_file_absolute:
+        title: "Genes not in expression file"
+        description: "Number of network vertices that are not present in the expression file."
         format: "{:.0f}"
+        hidden: true
+      genes_not_in_expression_file_relative:
+        title: "Genes not in expression file (%)"
+        description: "Fraction of network vertices that are not present in the expression file."
+        format: "{:.1%}"
+      genes_filtered_by_threshold_absolute:
+        title: "Genes filtered by threshold"
+        description: "Number of network vertices that are present in the expression file but removed because their expression is at or below the threshold."
+        format: "{:.0f}"
+        hidden: true
+      genes_filtered_by_threshold_relative:
+        title: "Genes filtered by threshold (%)"
+        description: "Fraction of network vertices that are present in the expression file but removed because their expression is at or below the threshold."
+        format: "{:.1%}"
 
   digest_reference_free:
     section_name: "DIGEST (reference-free)"
