@@ -4,6 +4,7 @@
     "title": "nf-core/diseasemodulediscovery pipeline - params.input schema",
     "description": "Schema for the file provided with params.input",
     "type": "array",
+    "required": ["seeds", "network"],
     "items": {
         "type": "object",
         "properties": {
@@ -29,6 +30,9 @@
                 "format": "directory-path",
                 "exists": true,
                 "errorMessage": "The perturbed_networks path must point to an existing directory and cannot contain spaces."
+            },
+            "tissue": {
+                "type": "string"
             }
         }
     }
