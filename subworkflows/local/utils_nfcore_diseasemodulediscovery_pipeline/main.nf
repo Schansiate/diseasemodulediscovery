@@ -107,6 +107,7 @@ workflow PIPELINE_INITIALISATION {
     network_param_set = (params.network != null)
     shortest_paths_param_set = (params.shortest_paths != null)
     perturbed_networks_param_set = (params.perturbed_networks != null)
+    tissue_param_set = (params.tissue != null)
 
     if(params.input){
 
@@ -122,17 +123,14 @@ workflow PIPELINE_INITIALISATION {
         // channel: [ path(seeds), path(network), path(shortest_paths), path(perturbed_networks) ]
         ch_input = Channel
             .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
-            .map{seeds, network, shortest_paths, perturbed_networks ->
+            .map{seeds, network, shortest_paths, perturbed_networks, tissue ->
                 if((seeds.size()==0)){
                     error("No seeds files specified in the sample sheet")
                 }
                 if((network.size()==0)){
                     error("No network file specified in the sample sheet")
                 }
-                if(seeds.size()!= network.size()){
-                    error("Mismatch between number of seeds and network files specified in the sample sheet. Each row in the sample sheet should correspond to a seed-network combination.")
-                }
-                [seeds, network, shortest_paths, perturbed_networks]
+                [seeds, network, shortest_paths, perturbed_networks, tissue]
             }
 
         log.info("Creating network and seeds channels based on tuples in the sample sheet")
@@ -155,6 +153,24 @@ workflow PIPELINE_INITIALISATION {
                 [ [ id: seeds.baseName + "." + network_id, seeds_id: seeds.baseName, network_id: network_id ] , seeds ]
             }
 
+        ch_tissue_specific_network = ch_input
+            .map{it ->
+                def network = mapPreparedNetwork(it[1], params.id_space)
+                def tissues = it[4]
+                [[id: network.baseName, network_id: network.baseName], tissues]
+            }
+        //todo: look if this way of creating seeds works
+        ch_tissue_specific_seeds = ch_input
+            .flatMap{ it ->
+                def seeds = it[0]
+                def network = it[1]
+                def network_id = mapPreparedNetwork(network, params.id_space).baseName
+                def tissues = it[4] instanceof String ? it[4].split(";") : []
+                tissues.collect{ tissue ->
+                    def tissue_specific_id =  seeds.baseName + network_id + "." + tissue
+                    [[id:tissue_specific_id, seeds_id: seeds.baseName, network_id: network_id + "." + tissue], seeds]
+                }
+            }
 
     } else if (seed_param_set && network_param_set){
 
@@ -171,6 +187,24 @@ workflow PIPELINE_INITIALISATION {
             .map{seeds, network_id ->
                 [ [ id: seeds.baseName + "." + network_id, seeds_id: seeds.baseName, network_id: network_id ] , seeds ]
             }
+
+        // creates crossproduct of network channel with tissue types as implemented in workflow now
+        if(tissue_param_set){
+            ch_tissue_specific_network = ch_network.map{meta, _network -> [meta, params.tissue]}
+            ch_tissue_specific_seeds = ch_seeds.map{meta, seeds -> [meta, seeds, params.tissue]}
+                .flatMap{meta, seeds, tissue ->
+                    def tissues = tissue instanceof String ? tissue.split(";") : []
+                    tissues.collect{ t ->
+                        def dup = meta.clone()
+                        dup.id = meta.id + "." + t
+                        dup.network_id = meta.network_id + "." + t
+                        [dup, seeds]
+                    }
+                }
+        } else {
+            ch_tissue_specific_network = Channel.empty()
+            ch_tissue_specific_seeds = Channel.empty()
+        }
 
         // Add sp files, if provided (currently does not check if the number of the shortest paths matches the number of the networks and does not work with missing values)
         if(shortest_paths_param_set){
@@ -191,6 +225,7 @@ workflow PIPELINE_INITIALISATION {
         } else{
             ch_network = ch_network.map{meta, network, sp -> [meta, network, sp, []]}
         }
+
 
     } else {
         error("You need to specify either a sample sheet (--input) or the seeds (--seeds) and network (--network) files")
@@ -221,12 +256,15 @@ workflow PIPELINE_INITIALISATION {
 
     ch_network = ch_network.map{meta, network, sp, perturbed_networks -> [meta, network]}
 
+
     emit:
     versions    = ch_versions
     seeds       = ch_seeds                      // channel: [ val(meta[id,seeds_id,network_id]), path(seeds) ]
     network     = ch_network                    // channel: [ val(meta[id,network_id]), path(network) ]
     shortest_paths = ch_shortest_paths          // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     perturbed_networks = ch_perturbed_networks    // channel: [ val(meta[id,network_id]), [path(perturbed_network)] ]
+    tissue_specific_network = ch_tissue_specific_network // channel: [val(network_id), tissues, path(network)]
+    tissue_specific_seeds = ch_tissue_specific_seeds // channel: [ val(meta[id,seeds_id,network_id,tissues]), path(seeds) ]
 }
 
 /*
