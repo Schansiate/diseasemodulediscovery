@@ -17,7 +17,12 @@ process TISSUE_SPECIFIC_FILTERING {
 
     script:
     """
-    tissue_specific_filtering.py --network ${network} --tissue ${tissue} --expression_file ${expression_file} --id_space ${params.id_space}
+    tissue_specific_filtering.py --network ${network} \
+    --tissue ${tissue} \
+    --expression_file ${expression_file} \
+    --id_space ${params.id_space} \
+    --threshold ${params.filtering_threshold}
+
     graph_tool_parser.py ${meta.id}.gt -f gt -l DEBUG
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
