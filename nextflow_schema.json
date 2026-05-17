@@ -473,6 +473,11 @@
         }
     ],
     "properties": {
+        "filtering_threshold": {
+            "type": "number",
+            "description": "Expression threshold to filter the networks",
+            "default": 0.1
+        },
         "run_filtered_networks_only": {
             "type": "boolean",
             "description": "flag for running network expansion tools on filtered networks only"
