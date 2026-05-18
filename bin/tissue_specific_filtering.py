@@ -40,6 +40,8 @@ def convert_id_space(expression_df, id_space):
         targetSpace = "ENTREZGENE_ACC"
     elif id_space == "uniprot":
         targetSpace = "UNIPROT_GN_ACC"
+    elif id_space == "symbol":
+        targetSpace = "HGNC"
     else:
         raise ValueError(f"Unsupported id_space: {id_space}")
     gp = GProfiler(return_dataframe=True)
