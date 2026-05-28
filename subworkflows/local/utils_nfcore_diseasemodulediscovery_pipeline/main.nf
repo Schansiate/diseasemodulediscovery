@@ -153,6 +153,16 @@ workflow PIPELINE_INITIALISATION {
                 [ [ id: seeds.baseName + "." + network_id, seeds_id: seeds.baseName, network_id: network_id ] , seeds ]
             }
 
+        ch_tissue_specific_input = ch_input
+            .flatMap{it ->
+                def seeds = it[0]
+                def network = mapPreparedNetwork(it[1], params.id_space)
+                def tissues = it[4] instanceof String ? it[4].split(";") : []
+                tissues.collect{ tissue ->
+                    [seeds, network, tissue]
+                }
+            }
+
         ch_tissue_specific_network = ch_input
             .map{it ->
                 def network = mapPreparedNetwork(it[1], params.id_space)
@@ -190,6 +200,7 @@ workflow PIPELINE_INITIALISATION {
 
         // creates crossproduct of network channel with tissue types as implemented in workflow now
         if(tissue_param_set){
+
             ch_tissue_specific_network = ch_network.map{meta, _network -> [meta, params.tissue]}
             ch_tissue_specific_seeds = ch_seeds.map{meta, seeds -> [meta, seeds, params.tissue]}
                 .flatMap{meta, seeds, tissue ->
@@ -201,9 +212,14 @@ workflow PIPELINE_INITIALISATION {
                         [dup, seeds]
                     }
                 }
+
+            ch_tissue_specific_input = Channel
+                .fromPath(params.seeds.split(',').flatten(), checkIfExists: true)
+                .combine(ch_network.map{_meta, network -> network})
+                .combine(params.tissue.split(",").flatten())
+
         } else {
-            ch_tissue_specific_network = Channel.empty()
-            ch_tissue_specific_seeds = Channel.empty()
+            ch_tissue_specific_input = Channel.empty()
         }
 
         // Add sp files, if provided (currently does not check if the number of the shortest paths matches the number of the networks and does not work with missing values)
@@ -263,8 +279,7 @@ workflow PIPELINE_INITIALISATION {
     network     = ch_network                    // channel: [ val(meta[id,network_id]), path(network) ]
     shortest_paths = ch_shortest_paths          // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     perturbed_networks = ch_perturbed_networks    // channel: [ val(meta[id,network_id]), [path(perturbed_network)] ]
-    tissue_specific_network = ch_tissue_specific_network // channel: [val(network_id), tissues, path(network)]
-    tissue_specific_seeds = ch_tissue_specific_seeds // channel: [ val(meta[id,seeds_id,network_id,tissues]), path(seeds) ]
+    tissue_specific_input = ch_tissue_specific_input // channel [path(seeds), path(network), val(tissue)]
 }
 
 /*

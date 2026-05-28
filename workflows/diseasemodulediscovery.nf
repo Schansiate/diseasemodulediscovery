@@ -118,9 +118,7 @@ workflow DISEASEMODULEDISCOVERY {
     ch_network              // channel: [ val(meta[id,network_id]), path(network) ]
     ch_shortest_paths       // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     ch_perturbed_networks    // channel: [ val(meta[id,network_id]), [path(perturbed_networks)] ]
-    ch_tissue_specific_network  // channel: [network_id, tissues]
-    ch_tissue_specific_seeds     // channel: [ val(meta[id,seeds_id,network_id]), [path(tissue_specific_seeds)] ]
-
+    ch_tissue_specific_input // channel: [path(seeds), path(network), val(tissue)]
     main:
 
     // Params
@@ -146,15 +144,21 @@ workflow DISEASEMODULEDISCOVERY {
         .map{ meta, path -> path }
     ch_network_gt = GRAPHTOOLPARSER.out.network
     //Tissue specific filtering
-        ch_tissue_specific_network = ch_tissue_specific_network.join(ch_network_gt, by:0)
-            .flatMap{meta, tissues, network ->
-                tissues = tissues instanceof String ? tissues.split(";") : []
-                tissues.collect{ tissue ->
-                    def dup = meta.clone()
-                    dup.id = meta.id + "." + tissue
-                    dup.network_id = meta.network_id + "." + tissue
-                    [dup, network, tissue]
-                }
+    if(ch_tissue_specific_input.ifEmpty(false)){
+        ch_tissue_specific_network = ch_tissue_specific_input
+            .map{_seeds, network, tissue ->
+                [[id: network.baseName, network_id: network.baseName], tissue]
+            }.join(ch_network_gt, by:0)
+            .map{ meta, tissue, network ->
+                def dup = meta.clone()
+                dup.id = meta.id + "." + tissue
+                dup.network_id = meta.network_id + "." + tissue
+                [dup, network, tissue]
+            }
+        ch_tissue_specific_seeds = ch_tissue_specific_input
+            .map{seeds, network, tissue ->
+                def tissue_specific_id = seeds.baseName + network.baseName + "." + tissue
+                [[id: tissue_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + tissue], seeds]
             }
         TISSUE_SPECIFIC_FILTERING(ch_tissue_specific_network,
                                  "https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz")
@@ -182,6 +186,7 @@ workflow DISEASEMODULEDISCOVERY {
             ch_perturbed_networks = ch_perturbed_networks.mix(ch_tissue_specific_network.map{meta, _path -> [meta, []]})
             ch_shortest_paths = ch_shortest_paths.mix(ch_tissue_specific_network.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]})
         }
+    }
 
 
     ch_network_multiqc = ch_network_multiqc
