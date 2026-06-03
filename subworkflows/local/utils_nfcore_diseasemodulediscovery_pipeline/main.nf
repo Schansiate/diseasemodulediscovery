@@ -163,25 +163,6 @@ workflow PIPELINE_INITIALISATION {
                 }
             }
 
-        ch_tissue_specific_network = ch_input
-            .map{it ->
-                def network = mapPreparedNetwork(it[1], params.id_space)
-                def tissues = it[4]
-                [[id: network.baseName, network_id: network.baseName], tissues]
-            }
-        //todo: look if this way of creating seeds works
-        ch_tissue_specific_seeds = ch_input
-            .flatMap{ it ->
-                def seeds = it[0]
-                def network = it[1]
-                def network_id = mapPreparedNetwork(network, params.id_space).baseName
-                def tissues = it[4] instanceof String ? it[4].split(";") : []
-                tissues.collect{ tissue ->
-                    def tissue_specific_id =  seeds.baseName + network_id + "." + tissue
-                    [[id:tissue_specific_id, seeds_id: seeds.baseName, network_id: network_id + "." + tissue], seeds]
-                }
-            }
-
     } else if (seed_param_set && network_param_set){
 
         log.info("Creating network and seeds channels based on the combination of all seed and network files provided")
@@ -200,24 +181,10 @@ workflow PIPELINE_INITIALISATION {
 
         // creates crossproduct of network channel with tissue types as implemented in workflow now
         if(tissue_param_set){
-
-            ch_tissue_specific_network = ch_network.map{meta, _network -> [meta, params.tissue]}
-            ch_tissue_specific_seeds = ch_seeds.map{meta, seeds -> [meta, seeds, params.tissue]}
-                .flatMap{meta, seeds, tissue ->
-                    def tissues = tissue instanceof String ? tissue.split(";") : []
-                    tissues.collect{ t ->
-                        def dup = meta.clone()
-                        dup.id = meta.id + "." + t
-                        dup.network_id = meta.network_id + "." + t
-                        [dup, seeds]
-                    }
-                }
-
             ch_tissue_specific_input = Channel
                 .fromPath(params.seeds.split(',').flatten(), checkIfExists: true)
                 .combine(ch_network.map{_meta, network -> network})
                 .combine(params.tissue.split(",").flatten())
-
         } else {
             ch_tissue_specific_input = Channel.empty()
         }
