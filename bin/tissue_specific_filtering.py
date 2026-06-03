@@ -3,38 +3,41 @@
 import argparse
 from pathlib import Path
 import sys
-import pandas as pd 
-import graph_tool.all as gt 
-import util as utils 
-from gprofiler import GProfiler 
+import pandas as pd
+import graph_tool.all as gt
+import util as utils
+from gprofiler import GProfiler
+
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description="filter network by tissue specific expression")
-    parser.add_argument("--network",
-                        type=str,
-                        required=True,
-                        help="path to the network file in gt format")
-    parser.add_argument("--tissue",
-                        required=True,
-                        help="tissue to filter by")
-    parser.add_argument("--threshold",
-                        type=float,
-                        default=1.0,
-                        help="expression threshold to filter by")
-    parser.add_argument("--expression_file",
-                        type=str,
-                        required=True,
-                        help="path to the expression file")
-    parser.add_argument("--id_space",
-                        type=str,
-                        default="ensembl",
-                        help="id space of the gene names in the network and expression file")
+    parser = argparse.ArgumentParser(
+        description="filter network by tissue specific expression"
+    )
+    parser.add_argument(
+        "--network",
+        type=str,
+        required=True,
+        help="path to the network file in gt format",
+    )
+    parser.add_argument("--tissue", required=True, help="tissue to filter by")
+    parser.add_argument(
+        "--threshold", type=float, default=1.0, help="expression threshold to filter by"
+    )
+    parser.add_argument(
+        "--expression_file", type=str, required=True, help="path to the expression file"
+    )
+    parser.add_argument(
+        "--id_space",
+        type=str,
+        default="ensembl",
+        help="id space of the gene names in the network and expression file",
+    )
     return parser.parse_args(argv)
 
 
 def convert_id_space(expression_df, id_space):
     ids = expression_df["Name"]
-    if id_space == "ensembl": 
+    if id_space == "ensembl":
         return expression_df
     elif id_space == "entrez":
         targetSpace = "ENTREZGENE_ACC"
@@ -45,21 +48,24 @@ def convert_id_space(expression_df, id_space):
     else:
         raise ValueError(f"Unsupported id_space: {id_space}")
     gp = GProfiler(return_dataframe=True)
-    query_result = gp.convert(organism="hsapiens", query=ids.tolist(),target_namespace=targetSpace)
-    #not_found = query_result.loc[query_result["converted"].astype(str) == "None", "incoming"].shape[0] / expression_df.shape[0]
-    query_result = query_result.merge(expression_df, left_on="incoming", right_on="Name")
+    query_result = gp.convert(
+        organism="hsapiens", query=ids.tolist(), target_namespace=targetSpace
+    )
+    # not_found = query_result.loc[query_result["converted"].astype(str) == "None", "incoming"].shape[0] / expression_df.shape[0]
+    query_result = query_result.merge(
+        expression_df, left_on="incoming", right_on="Name"
+    )
     query_result = query_result[["incoming", "converted", "expression"]]
     collapsed_result = (
         query_result[query_result["converted"].astype(str) != "None"]
-        .assign(converted=lambda x : x["converted"].astype(str))
+        .assign(converted=lambda x: x["converted"].astype(str))
         .drop(columns=["incoming"])
         .groupby("converted", as_index=False)
-        .agg({
-            "expression": "sum"
-        })
+        .agg({"expression": "sum"})
     )
     collapsed_result = collapsed_result.rename(columns={"converted": "Name"})
     return collapsed_result
+
 
 def filter_network(network_file, threshold, expression_by_tissue, tissue):
     network = gt.load_graph(network_file)
@@ -67,48 +73,85 @@ def filter_network(network_file, threshold, expression_by_tissue, tissue):
     name_index = utils.name2index(network)
     network_num_vertices = network.num_vertices()
     expression_num_entries = expression_by_tissue.shape[0]
-    in_network_expression = expression_by_tissue[expression_by_tissue["Name"].isin(name_index.keys())].copy()
+    in_network_expression = expression_by_tissue[
+        expression_by_tissue["Name"].isin(name_index.keys())
+    ].copy()
     genes_not_in_network = expression_num_entries - in_network_expression.shape[0]
-    genes_not_in_expression_file = network_num_vertices - in_network_expression["Name"].nunique()
-    tissue_specific_in_network = in_network_expression[in_network_expression["expression"] > threshold].copy()
-    genes_filtered_by_threshold = in_network_expression.shape[0] - tissue_specific_in_network.shape[0]
-    tissue_specific_in_network["vertex_id"] = tissue_specific_in_network["Name"].map(name_index)
-    tissue_filter = f"{tissue}_filter"
-    network.vp[tissue_filter] = network.new_vertex_property("bool")
+    genes_not_in_expression_file = (
+        network_num_vertices - in_network_expression["Name"].nunique()
+    )
+    tissue_specific_in_network = in_network_expression[
+        in_network_expression["expression"] > threshold
+    ].copy()
+    genes_filtered_by_threshold = (
+        in_network_expression.shape[0] - tissue_specific_in_network.shape[0]
+    )
+    tissue_specific_in_network["vertex_id"] = tissue_specific_in_network["Name"].map(
+        name_index
+    )
+
+    # filter network by tissue specific expression
+    network.vp["tissue_filter"] = network.new_vertex_property("bool")
+    network.vp["expression_in_tissue"] = network.new_vertex_property("double")
     for vertex_id in tissue_specific_in_network["vertex_id"].unique():
-        network.vp[tissue_filter][vertex_id] = True
-    network.set_vertex_filter(network.vp[tissue_filter])
+        network.vp["tissue_filter"][vertex_id] = True
+        expression_value = tissue_specific_in_network.loc[
+            tissue_specific_in_network["vertex_id"] == vertex_id
+        ]["expression"].values[0]
+        network.vp["expression_in_tissue"][vertex_id] = expression_value
+    network.set_vertex_filter(network.vp["tissue_filter"])
     network.purge_vertices()
     network.clear_filters()
-    del network.vp[tissue_filter]
+    del network.vp["tissue_filter"]
     network.save(f"{stem}.{tissue}.gt")
-    
+
     return {
         "genes_not_in_network_absolute": genes_not_in_network,
-        "genes_not_in_network_relative": genes_not_in_network / expression_num_entries if expression_num_entries else 0.0,
+        "genes_not_in_network_relative": (
+            genes_not_in_network / expression_num_entries
+            if expression_num_entries
+            else 0.0
+        ),
         "genes_not_in_expression_file_absolute": genes_not_in_expression_file,
-        "genes_not_in_expression_file_relative": genes_not_in_expression_file / network_num_vertices if network_num_vertices else 0.0,
+        "genes_not_in_expression_file_relative": (
+            genes_not_in_expression_file / network_num_vertices
+            if network_num_vertices
+            else 0.0
+        ),
         "genes_filtered_by_threshold_absolute": genes_filtered_by_threshold,
-        "genes_filtered_by_threshold_relative": genes_filtered_by_threshold / network_num_vertices if network_num_vertices else 0.0,
+        "genes_filtered_by_threshold_relative": (
+            genes_filtered_by_threshold / network_num_vertices
+            if network_num_vertices
+            else 0.0
+        ),
     }
-
 
 
 def main(argv=None):
     args = parse_args(argv)
-    global id_space 
+    global id_space
     id_space = args.id_space
-    expression_by_tissue = pd.read_csv(args.expression_file, sep="\t", skiprows=2, header=0)
-    #trim version numbers from ensembl IDs 
-    expression_by_tissue["Name"] = expression_by_tissue["Name"].apply(lambda x: x.split(".")[0])
-    #select only the relevant tissue and name columns
+    expression_by_tissue = pd.read_csv(
+        args.expression_file, sep="\t", skiprows=2, header=0
+    )
+    # trim version numbers from ensembl IDs
+    expression_by_tissue["Name"] = expression_by_tissue["Name"].apply(
+        lambda x: x.split(".")[0]
+    )
+    # select only the relevant tissue and name columns
     expression_by_tissue = expression_by_tissue[["Name", args.tissue]]
-    expression_by_tissue = expression_by_tissue.rename(columns={args.tissue: "expression"})
-    #map gene_ids to the specified id space 
+    expression_by_tissue = expression_by_tissue.rename(
+        columns={args.tissue: "expression"}
+    )
+    # map gene_ids to the specified id space
     expression_by_tissue = convert_id_space(expression_by_tissue, args.id_space)
-    n_genes_in_tissue = expression_by_tissue[expression_by_tissue["expression"] > args.threshold].shape[0]
-    #filter network by tissue specific expression with the given threshold
-    filtering_statistics = filter_network(args.network, args.threshold, expression_by_tissue, args.tissue)
+    n_genes_in_tissue = expression_by_tissue[
+        expression_by_tissue["expression"] > args.threshold
+    ].shape[0]
+    # filter network by tissue specific expression with the given threshold
+    filtering_statistics = filter_network(
+        args.network, args.threshold, expression_by_tissue, args.tissue
+    )
     with open("filtering_statistic.tsv", "w") as f:
         f.write(
             "network\ttissue\tgenes_in_tissue\t"
@@ -122,5 +165,7 @@ def main(argv=None):
             f"{filtering_statistics['genes_not_in_expression_file_absolute']}\t{filtering_statistics['genes_not_in_expression_file_relative']}\t"
             f"{filtering_statistics['genes_filtered_by_threshold_absolute']}\t{filtering_statistics['genes_filtered_by_threshold_relative']}\n"
         )
+
+
 if __name__ == "__main__":
     sys.exit(main())
