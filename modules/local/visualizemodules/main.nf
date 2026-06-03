@@ -9,6 +9,7 @@ process VISUALIZEMODULES {
     tuple val(meta), path("${meta.id}.pdf")      , emit: pdf  , optional: true
     tuple val(meta), path("${meta.id}.png")      , emit: png  , optional: true
     tuple val(meta), path("${meta.id}.svg")      , emit: svg  , optional: true
+    tuple val(meta), path("${meta.id}.expression.png"), emit: expression_png, optional: true
     tuple val(meta), path("${meta.id}.html")     , emit: html , optional: true
     path "versions.yml"                          , emit: versions
 

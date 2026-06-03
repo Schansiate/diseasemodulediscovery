@@ -12,6 +12,12 @@ from pathlib import Path
 import util
 
 import graph_tool.all as gt
+import matplotlib as mpl
+
+mpl.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import numpy as np
 import pandas as pd
 import networkx as nx
 import pyintergraph
@@ -65,6 +71,72 @@ def add_drugs(args, g, node_mapping):
             drug_vertex = node_mapping[drug]
             g.add_edge(protein_vertex, drug_vertex)
     return drug_set
+
+
+def visualize_expression(args, g, pos):
+    """Visualize tissue expression values as a PNG, if present."""
+    expression_property = "expression_in_tissue"
+    if expression_property not in g.vp:
+        logger.info(
+            "Skipping expression visualization because the graph has no "
+            "'expression_in_tissue' vertex property."
+        )
+        return
+
+    expr = g.vp[expression_property]
+    values = np.array([float(expr[v]) for v in g.vertices()], dtype=float)
+
+    vmin = values.min()
+    vmax = values.max()
+    if vmin == vmax:
+        vmin -= 0.5
+        vmax += 0.5
+
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    cmap = mpl.colormaps["Reds"]
+
+    vertex_fill_color = g.new_vertex_property("vector<double>")
+    for v in g.vertices():
+        vertex_fill_color[v] = cmap(norm(float(expr[v])))
+
+    vertex_shape = g.new_vertex_property("string")
+    vertex_aspect = g.new_vertex_property("double")
+    for v in g.vertices():
+        if "is_seed" in g.vp and g.vp["is_seed"][v]:
+            vertex_shape[v] = "square"
+            vertex_aspect[v] = 1.6
+        else:
+            vertex_shape[v] = "circle"
+            vertex_aspect[v] = 1.0
+
+    raw_output = Path(f"{args.prefix}.expression.raw.png")
+    output = f"{args.prefix}.expression.png"
+    gt.graph_draw(
+        g,
+        pos=pos,
+        vertex_fill_color=vertex_fill_color,
+        vertex_color="black",
+        vertex_shape=vertex_shape,
+        vertex_aspect=vertex_aspect,
+        vertex_size=18,
+        bg_color="white",
+        output_size=(800, 800),
+        output=str(raw_output),
+    )
+
+    img = plt.imread(raw_output)
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.imshow(img)
+    ax.axis("off")
+
+    sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
+    sm.set_array([])
+    cbar = fig.colorbar(sm, ax=ax, fraction=0.035, pad=0.02)
+    cbar.set_label("Expression value")
+
+    fig.savefig(output, bbox_inches="tight")
+    plt.close(fig)
+    raw_output.unlink(missing_ok=True)
 
 
 def parse_args(argv=None):
@@ -138,6 +210,8 @@ def main(argv=None):
     # calculate the layout
     pos = gt.sfdp_layout(g)
 
+    visualize_expression(args, g, pos)
+
     # save as pdf, png, svg
     n = g.num_vertices()
     for format in ["pdf", "png", "svg"]:
@@ -180,11 +254,12 @@ def main(argv=None):
     # add titles
     for node in nt.nodes:
         row = vp_df.loc[node["name"]]
+        node_properties = "\n".join(f"{col}: {val}" for col, val in row.items())
         node[
             "title"
         ] = f"""
             {node['name']}\n
-            {'\n'.join(f'{col}: {val}' for col, val in row.items())}
+            {node_properties}
         """
 
     # turn off physics
