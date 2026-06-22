@@ -473,6 +473,10 @@
         }
     ],
     "properties": {
+        "custom_filtering_file": {
+            "type": "string",
+            "description": "Custom file for tissue specific filtering"
+        },
         "filtering_threshold": {
             "type": "number",
             "description": "Expression threshold to filter the networks",
