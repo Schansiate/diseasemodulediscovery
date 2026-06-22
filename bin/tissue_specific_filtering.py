@@ -52,9 +52,7 @@ def convert_id_space(expression_df, id_space):
         organism="hsapiens", query=ids.tolist(), target_namespace=targetSpace
     )
     # not_found = query_result.loc[query_result["converted"].astype(str) == "None", "incoming"].shape[0] / expression_df.shape[0]
-    query_result = query_result.merge(
-        expression_df, left_on="incoming", right_on="id"
-    )
+    query_result = query_result.merge(expression_df, left_on="incoming", right_on="id")
     query_result = query_result[["incoming", "converted", "expression"]]
     collapsed_result = (
         query_result[query_result["converted"].astype(str) != "None"]
@@ -134,7 +132,9 @@ def main(argv=None):
     expression_by_tissue = pd.read_csv(
         args.expression_file, sep="\t", skiprows=2, header=0
     )
-    expression_by_tissue.rename(columns={expression_by_tissue.columns[0]: "id"}, inplace=True)
+    expression_by_tissue.rename(
+        columns={expression_by_tissue.columns[0]: "id"}, inplace=True
+    )
     # trim version numbers from ensembl IDs
     expression_by_tissue["id"] = expression_by_tissue["id"].apply(
         lambda x: x.split(".")[0]
