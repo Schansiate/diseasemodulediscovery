@@ -53,7 +53,7 @@ def convert_id_space(expression_df, id_space):
     )
     # not_found = query_result.loc[query_result["converted"].astype(str) == "None", "incoming"].shape[0] / expression_df.shape[0]
     query_result = query_result.merge(
-        expression_df, left_on="incoming", right_on="Name"
+        expression_df, left_on="incoming", right_on="id"
     )
     query_result = query_result[["incoming", "converted", "expression"]]
     collapsed_result = (
@@ -63,7 +63,7 @@ def convert_id_space(expression_df, id_space):
         .groupby("converted", as_index=False)
         .agg({"expression": "sum"})
     )
-    collapsed_result = collapsed_result.rename(columns={"converted": "Name"})
+    collapsed_result = collapsed_result.rename(columns={"converted": "id"})
     return collapsed_result
 
 
@@ -74,11 +74,11 @@ def filter_network(network_file, threshold, expression_by_tissue, tissue):
     network_num_vertices = network.num_vertices()
     expression_num_entries = expression_by_tissue.shape[0]
     in_network_expression = expression_by_tissue[
-        expression_by_tissue["Name"].isin(name_index.keys())
+        expression_by_tissue["id"].isin(name_index.keys())
     ].copy()
     genes_not_in_network = expression_num_entries - in_network_expression.shape[0]
     genes_not_in_expression_file = (
-        network_num_vertices - in_network_expression["Name"].nunique()
+        network_num_vertices - in_network_expression["id"].nunique()
     )
     tissue_specific_in_network = in_network_expression[
         in_network_expression["expression"] > threshold
@@ -86,7 +86,7 @@ def filter_network(network_file, threshold, expression_by_tissue, tissue):
     genes_filtered_by_threshold = (
         in_network_expression.shape[0] - tissue_specific_in_network.shape[0]
     )
-    tissue_specific_in_network["vertex_id"] = tissue_specific_in_network["Name"].map(
+    tissue_specific_in_network["vertex_id"] = tissue_specific_in_network["id"].map(
         name_index
     )
 
@@ -134,12 +134,13 @@ def main(argv=None):
     expression_by_tissue = pd.read_csv(
         args.expression_file, sep="\t", skiprows=2, header=0
     )
+    expression_by_tissue.rename(columns={expression_by_tissue.columns[0]: "id"}, inplace=True)
     # trim version numbers from ensembl IDs
-    expression_by_tissue["Name"] = expression_by_tissue["Name"].apply(
+    expression_by_tissue["id"] = expression_by_tissue["id"].apply(
         lambda x: x.split(".")[0]
     )
     # select only the relevant tissue and name columns
-    expression_by_tissue = expression_by_tissue[["Name", args.tissue]]
+    expression_by_tissue = expression_by_tissue[["id", args.tissue]]
     expression_by_tissue = expression_by_tissue.rename(
         columns={args.tissue: "expression"}
     )

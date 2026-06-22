@@ -160,8 +160,14 @@ workflow DISEASEMODULEDISCOVERY {
                 def tissue_specific_id = seeds.baseName + network.baseName + "." + tissue
                 [[id: tissue_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + tissue], seeds]
             }
+        //check whether custom filtering is specfied 
+        if(params.custom_filtering_file != null){
+            filtering_file = file(params.custom_filtering_file)
+        }else{
+            filtering_file = "https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz"
+        }
         TISSUE_SPECIFIC_FILTERING(ch_tissue_specific_network,
-                                 "https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz")
+                                 filtering_file)
         ch_versions = ch_versions.mix(TISSUE_SPECIFIC_FILTERING.out.versions)
         ch_tissue_specific_network = TISSUE_SPECIFIC_FILTERING.out.filtered_network
         ch_filtering_statistic = TISSUE_SPECIFIC_FILTERING.out.filtering_statistic
