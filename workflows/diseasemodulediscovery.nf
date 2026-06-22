@@ -161,7 +161,7 @@ workflow DISEASEMODULEDISCOVERY {
                 def tissue_specific_id = seeds.baseName + network.baseName + "." + tissue
                 [[id: tissue_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + tissue], seeds]
             }
-        //check whether custom filtering is specfied 
+        //check whether custom filtering is specfied
         if(params.custom_filtering_file != null){
             filtering_file = file(params.custom_filtering_file)
         }else{
