@@ -4,8 +4,7 @@ process TISSUE_SPECIFIC_FILTERING {
     container 'docker.io/motan04/modulediscovery_python_dependencies:latest'
     input:
     tuple val(meta), path(network), val(tissue)
-    path(expression_file)
-
+    path(custom_filtering_file)
     output:
     tuple val(meta), path("${meta.id}.gt")             , emit: filtered_network
     tuple val(meta), path("input_network_multiqc.tsv") , emit: multiqc
@@ -16,10 +15,12 @@ process TISSUE_SPECIFIC_FILTERING {
     task.ext.when == null || task.ext.when
 
     script:
+
     """
     tissue_specific_filtering.py --network ${network} \
     --tissue ${tissue} \
-    --expression_file ${expression_file} \
+    --filtering_source ${params.filtering_source} \
+    --custom_expression_file ${custom_filtering_file} \
     --id_space ${params.id_space} \
     --threshold ${params.filtering_threshold}
 

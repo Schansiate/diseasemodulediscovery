@@ -3,10 +3,14 @@
 import argparse
 from pathlib import Path
 import sys
+import tempfile
+import requests
 import pandas as pd
 import graph_tool.all as gt
 import util as utils
 from gprofiler import GProfiler
+
+GTEX_URL = "https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz"
 
 
 def parse_args(argv=None):
@@ -24,7 +28,16 @@ def parse_args(argv=None):
         "--threshold", type=float, default=1.0, help="expression threshold to filter by"
     )
     parser.add_argument(
-        "--expression_file", type=str, required=True, help="path to the expression file"
+        "--filtering_source",
+        type=str,
+        default=None,
+        help="database name to use as expression source (GTEx, ProteomicsDB, PAXDB)",
+    )
+    parser.add_argument(
+        "--custom_expression_file",
+        type=str,
+        default=None,
+        help="path to a custom expression file with columns 'id' and 'expression'",
     )
     parser.add_argument(
         "--id_space",
@@ -35,8 +48,43 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+def resolve_expression_file(filtering_source, custom_expression_file, tissue):
+    if filtering_source != "null" and custom_expression_file != "null":
+        raise ValueError(
+            "Specify either --filtering_source or --custom_expression_file, not both"
+        )
+    if filtering_source == "null" and custom_expression_file == "null":
+        raise ValueError(
+            "One of --filtering_source or --custom_expression_file must be specified"
+        )
+
+    if custom_expression_file != "null":
+        df = pd.read_csv(custom_expression_file, sep="\t", header=0)
+        df = df[["id", tissue]].rename(columns={tissue: "expression"})
+        return df
+
+    if filtering_source == "GTEx":
+        response = requests.get(GTEX_URL, stream=True)
+        response.raise_for_status()
+        tmp = tempfile.NamedTemporaryFile(suffix=".gct.gz", delete=False)
+        for chunk in response.iter_content(chunk_size=8192):
+            tmp.write(chunk)
+        tmp.close()
+        df = pd.read_csv(tmp.name, sep="\t", skiprows=2, header=0)
+        df.rename(columns={df.columns[0]: "id"}, inplace=True)
+        df = df[["id", tissue]].rename(columns={tissue: "expression"})
+        df["id"] = df["id"].apply(lambda x: x.split(".")[0])
+        return df
+    elif filtering_source in ("ProteomicsDB", "PAXDB"):
+        raise NotImplementedError(f"{filtering_source} support is not yet implemented")
+    else:
+        raise ValueError(
+            f"Unknown filtering_source: '{filtering_source}'. Must be one of: GTEx, ProteomicsDB, PAXDB"
+        )
+
+
 def convert_id_space(expression_df, id_space):
-    ids = expression_df["Name"]
+    ids = expression_df["id"]
     if id_space == "ensembl":
         return expression_df
     elif id_space == "entrez":
@@ -129,20 +177,8 @@ def main(argv=None):
     args = parse_args(argv)
     global id_space
     id_space = args.id_space
-    expression_by_tissue = pd.read_csv(
-        args.expression_file, sep="\t", skiprows=2, header=0
-    )
-    expression_by_tissue.rename(
-        columns={expression_by_tissue.columns[0]: "id"}, inplace=True
-    )
-    # trim version numbers from ensembl IDs
-    expression_by_tissue["id"] = expression_by_tissue["id"].apply(
-        lambda x: x.split(".")[0]
-    )
-    # select only the relevant tissue and name columns
-    expression_by_tissue = expression_by_tissue[["id", args.tissue]]
-    expression_by_tissue = expression_by_tissue.rename(
-        columns={args.tissue: "expression"}
+    expression_by_tissue = resolve_expression_file(
+        args.filtering_source, args.custom_expression_file, args.tissue
     )
     # map gene_ids to the specified id space
     expression_by_tissue = convert_id_space(expression_by_tissue, args.id_space)
