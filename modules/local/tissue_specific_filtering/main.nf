@@ -7,10 +7,11 @@ process TISSUE_SPECIFIC_FILTERING {
     path(expression_file)
 
     output:
-    tuple val(meta), path("${meta.id}.gt")             , emit: filtered_network
-    tuple val(meta), path("input_network_multiqc.tsv") , emit: multiqc
-    tuple val(meta), path("filtering_statistic.tsv")  , emit: filtering_statistic
-    path "versions.yml"                                , emit: versions
+    tuple val(meta), path("${meta.id}.gt")                              , emit: filtered_network
+    tuple val(meta), path("input_network_multiqc.tsv")                  , emit: multiqc
+    tuple val(meta), path("filtering_statistic.tsv")                    , emit: filtering_statistic
+    tuple val(meta), path("${meta.id}.expression_distribution.yaml")    , emit: expression_distribution
+    path "versions.yml"                                                 , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

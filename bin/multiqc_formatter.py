@@ -24,6 +24,8 @@ def parse_input(input_files, header_file):
 
     if header_id == "network_node_degree_distribution":
         save_node_degree_distribution(input_files, header_file)
+    elif header_id == "filtered_network_expression_distribution":
+        save_expression_distribution(input_files, header_file)
 
 
 def save_node_degree_distribution(input_files, header_file):
@@ -52,6 +54,46 @@ def save_node_degree_distribution(input_files, header_file):
     mqc_payload["data"] = [absolute_data, relative_data]
 
     with open("./node_degree_distribution_mqc.yaml", "w", encoding="utf-8") as file:
+        yaml.safe_dump(mqc_payload, file, sort_keys=False, default_flow_style=None)
+
+
+def save_expression_distribution(input_files, header_file):
+    with open(header_file, "r", encoding="utf-8") as header:
+        mqc_payload = yaml.safe_load(header) or {}
+
+    data = {}
+    threshold = None
+
+    for file in input_files:
+        with open(file, "r", encoding="utf-8") as distribution_file:
+            distribution = yaml.safe_load(distribution_file) or {}
+
+        network_name = distribution.get("name") or file.stem
+        dist_data = distribution.get("data")
+
+        if dist_data is None:
+            raise ValueError(
+                f"Invalid distribution YAML in {file}: expected key 'data'"
+            )
+
+        data[network_name] = dist_data
+        if threshold is None:
+            threshold = distribution.get("threshold")
+
+    if threshold is not None:
+        mqc_payload.setdefault("pconfig", {})["x_lines"] = [
+            {
+                "value": threshold,
+                "color": "#e74c3c",
+                "width": 2,
+                "dash": "dash",
+                "label": f"Threshold ({threshold})",
+            }
+        ]
+
+    mqc_payload["data"] = data
+
+    with open("./expression_distribution_mqc.yaml", "w", encoding="utf-8") as file:
         yaml.safe_dump(mqc_payload, file, sort_keys=False, default_flow_style=None)
 
 

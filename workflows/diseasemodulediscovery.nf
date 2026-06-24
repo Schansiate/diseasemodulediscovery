@@ -622,11 +622,26 @@ workflow DISEASEMODULEDISCOVERY {
 
 
     // Format complex MultiQC input files
-    MULTIQCFORMATTER(
-        GRAPHTOOLPARSER.out.node_degree.map{_meta, path -> path}.collect().map{networks ->
-            def header = new File("$projectDir/assets/network_node_degree_distribution_header.yaml").toPath()
+    ch_multiqc_formatter_input = GRAPHTOOLPARSER.out.node_degree
+        .map{_meta, path -> path}
+        .collect()
+        .map{networks ->
+            def header = file("$projectDir/assets/network_node_degree_distribution_header.yaml")
             [header, networks]
         }
+        .mix(
+            TISSUE_SPECIFIC_FILTERING.out.expression_distribution
+                .map{ _meta, path -> path }
+                .collect()
+                .map{ files ->
+                    def header = file("$projectDir/assets/filtered_network_expression_distribution_header.yaml")
+                    [header, files]
+                }
+        )
+
+
+    MULTIQCFORMATTER(
+        ch_multiqc_formatter_input
     )
     ch_multiqc_files = ch_multiqc_files.mix(MULTIQCFORMATTER.out.multiqc)
     ch_versions = ch_versions.mix(MULTIQCFORMATTER.out.versions)

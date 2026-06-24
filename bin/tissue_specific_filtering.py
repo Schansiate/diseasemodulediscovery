@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import sys
 import pandas as pd
+import yaml
 import graph_tool.all as gt
 import util as utils
 from gprofiler import GProfiler
@@ -36,7 +37,7 @@ def parse_args(argv=None):
 
 
 def convert_id_space(expression_df, id_space):
-    ids = expression_df["Name"]
+    ids = expression_df["id"]
     if id_space == "ensembl":
         return expression_df
     elif id_space == "entrez":
@@ -63,6 +64,21 @@ def convert_id_space(expression_df, id_space):
     )
     collapsed_result = collapsed_result.rename(columns={"converted": "id"})
     return collapsed_result
+
+
+def save_expression_distribution(expression_by_tissue, stem, tissue, threshold):
+    values = expression_by_tissue["expression"]
+    if values.empty:
+        return
+    percentiles = list(range(0, 101))
+    pct_values = [float(values.quantile(p / 100)) for p in percentiles]
+    distribution = {
+        "name": f"{stem}.{tissue}",
+        "threshold": threshold,
+        "data": [[v, p] for p, v in zip(percentiles, pct_values)],
+    }
+    with open(f"{stem}.{tissue}.expression_distribution.yaml", "w") as f:
+        yaml.safe_dump(distribution, f, sort_keys=False, default_flow_style=None)
 
 
 def filter_network(network_file, threshold, expression_by_tissue, tissue):
@@ -102,6 +118,7 @@ def filter_network(network_file, threshold, expression_by_tissue, tissue):
     network.clear_filters()
     del network.vp["tissue_filter"]
     network.save(f"{stem}.{tissue}.gt")
+    save_expression_distribution(in_network_expression, stem, tissue, threshold)
 
     return {
         "genes_not_in_network_absolute": genes_not_in_network,

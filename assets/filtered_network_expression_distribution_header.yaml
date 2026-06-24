@@ -1,0 +1,13 @@
+parent_id: input
+id: filtered_network_expression_distribution
+parent_name: Input
+section_name: Filtered network expression distribution
+description: Cumulative distribution of expression values (TPM) for genes retained in the tissue-filtered network(s).
+plot_type: linegraph
+pconfig:
+  id: filtered_network_expression_distribution_line_graph
+  title: Filtered Network Expression Distribution
+  xlab: Expression (TPM)
+  ylab: Percentile
+  xlog: True
+data:
