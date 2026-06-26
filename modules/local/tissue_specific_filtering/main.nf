@@ -11,6 +11,7 @@ process TISSUE_SPECIFIC_FILTERING {
     tuple val(meta), path("input_network_multiqc.tsv")                  , emit: multiqc
     tuple val(meta), path("filtering_statistic.tsv")                    , emit: filtering_statistic
     tuple val(meta), path("${meta.id}.expression_distribution.yaml")    , emit: expression_distribution
+    tuple val(meta), path("${meta.id}.node_degree_distribution.yaml")   , emit: node_degree
     path "versions.yml"                                                 , emit: versions
 
     when:

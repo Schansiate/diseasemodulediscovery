@@ -146,16 +146,22 @@ workflow DISEASEMODULEDISCOVERY {
     ch_network_gt = GRAPHTOOLPARSER.out.network
     //Tissue specific filtering
     if(ch_tissue_specific_input.ifEmpty(false)){
+        ch_tissue_specific_input.view()
         ch_tissue_specific_network = ch_tissue_specific_input
             .map{_seeds, network, tissue ->
-                [[id: network.baseName, network_id: network.baseName], tissue]
-            }.join(ch_network_gt, by:0)
-            .map{ meta, tissue, network ->
+                [network.baseName, tissue]
+            }
+            .combine(
+                ch_network_gt.map{meta, network -> [meta.network_id, meta, network]},
+                by: 0
+            )
+            .map{ _network_id, tissue, meta, network ->
                 def dup = meta.clone()
                 dup.id = meta.id + "." + tissue
                 dup.network_id = meta.network_id + "." + tissue
                 [dup, network, tissue]
             }
+        ch_tissue_specific_network.view()
         ch_tissue_specific_seeds = ch_tissue_specific_input
             .map{seeds, network, tissue ->
                 def tissue_specific_id = seeds.baseName + network.baseName + "." + tissue
@@ -623,6 +629,7 @@ workflow DISEASEMODULEDISCOVERY {
 
     // Format complex MultiQC input files
     ch_multiqc_formatter_input = GRAPHTOOLPARSER.out.node_degree
+        .mix(TISSUE_SPECIFIC_FILTERING.out.node_degree)
         .map{_meta, path -> path}
         .collect()
         .map{networks ->
