@@ -478,10 +478,6 @@
         }
     ],
     "properties": {
-        "custom_filtering_file": {
-            "type": "string",
-            "description": "Custom file for tissue specific filtering"
-        },
         "filtering_threshold": {
             "type": "number",
             "description": "Expression threshold to filter the networks",
@@ -494,6 +490,14 @@
         "tissue": {
             "type": "string",
             "description": "tissues to filter for"
+        },
+        "filtering_source": {
+            "type": "string",
+            "default": "GTEx",
+            "description": "source for the expression values used for the filtering"
+        },
+        "custom_filtering_file": {
+            "type": "string"
         }
     }
 }
