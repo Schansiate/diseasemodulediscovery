@@ -160,7 +160,7 @@ workflow DISEASEMODULEDISCOVERY {
                 def tissue_specific_id = seeds.baseName + network.baseName + "." + tissue
                 [[id: tissue_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + tissue], seeds]
             }
-        TISSUE_SPECIFIC_FILTERING(ch_tissue_specific_network, file(params.custom_filtering_file))
+        TISSUE_SPECIFIC_FILTERING(ch_tissue_specific_network)
         ch_versions = ch_versions.mix(TISSUE_SPECIFIC_FILTERING.out.versions)
         ch_tissue_specific_network = TISSUE_SPECIFIC_FILTERING.out.filtered_network
         ch_filtering_statistic = TISSUE_SPECIFIC_FILTERING.out.filtering_statistic
