@@ -163,22 +163,24 @@ def convert_id_space(expression_df, id_space):
     return collapsed_result
 
 
-def save_expression_distribution(expression_by_tissue, stem, tissue, threshold):
+def save_expression_distribution(expression_by_tissue, stem, tissue, source, threshold):
     values = expression_by_tissue["expression"]
     if values.empty:
         return
     percentiles = list(range(0, 101))
     pct_values = [float(values.quantile(p / 100)) for p in percentiles]
     distribution = {
-        "name": f"{stem}.{tissue}",
+        "name": f"{stem}.{tissue}.{source}.{threshold}",
         "threshold": threshold,
         "data": [[v, p] for p, v in zip(percentiles, pct_values)],
     }
-    with open(f"{stem}.{tissue}.expression_distribution.yaml", "w") as f:
+    with open(
+        f"{stem}.{tissue}.{source}.{threshold}.expression_distribution.yaml", "w"
+    ) as f:
         yaml.safe_dump(distribution, f, sort_keys=False, default_flow_style=None)
 
 
-def filter_network(network_file, threshold, expression_by_tissue, tissue):
+def filter_network(network_file, threshold, expression_by_tissue, tissue, source):
     network = gt.load_graph(network_file)
     stem = Path(network_file).stem
     name_index = utils.name2index(network)
@@ -214,8 +216,8 @@ def filter_network(network_file, threshold, expression_by_tissue, tissue):
     network.purge_vertices()
     network.clear_filters()
     del network.vp["tissue_filter"]
-    network.save(f"{stem}.{tissue}.gt")
-    save_expression_distribution(in_network_expression, stem, tissue, threshold)
+    network.save(f"{stem}.{tissue}.{source}.{threshold}.gt")
+    save_expression_distribution(in_network_expression, stem, tissue, source, threshold)
 
     return {
         "genes_not_in_network_absolute": genes_not_in_network,
@@ -253,7 +255,11 @@ def main(argv=None):
     ].shape[0]
     # filter network by tissue specific expression with the given threshold
     filtering_statistics = filter_network(
-        args.network, args.threshold, expression_by_tissue, args.tissue
+        args.network,
+        args.threshold,
+        expression_by_tissue,
+        args.tissue,
+        args.filtering_source,
     )
     tissue_label = (
         f"<a href={dataset_link}>{args.tissue}</a>" if dataset_link else args.tissue

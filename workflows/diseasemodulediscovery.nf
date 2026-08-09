@@ -119,7 +119,7 @@ workflow DISEASEMODULEDISCOVERY {
     ch_network              // channel: [ val(meta[id,network_id]), path(network) ]
     ch_shortest_paths       // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     ch_perturbed_networks    // channel: [ val(meta[id,network_id]), [path(perturbed_networks)] ]
-    ch_tissue_specific_input // channel: [path(seeds), path(network), val(tissue)]
+    ch_tissue_specific_input // channel: [path(seeds), path(network), val(tissue), val(source), val(threshold)]
     main:
 
     // Params
@@ -148,24 +148,24 @@ workflow DISEASEMODULEDISCOVERY {
     if(ch_tissue_specific_input.ifEmpty(false)){
         ch_tissue_specific_input.view()
         ch_tissue_specific_network = ch_tissue_specific_input
-            .map{_seeds, network, tissue ->
-                [network.baseName, tissue]
+            .map{_seeds, network, tissue, source, threshold ->
+                [network.baseName, tissue, source, threshold]
             }
             .combine(
                 ch_network_gt.map{meta, network -> [meta.network_id, meta, network]},
                 by: 0
             )
-            .map{ _network_id, tissue, meta, network ->
+            .map{ _network_id, tissue, source, threshold, meta, network ->
                 def dup = meta.clone()
-                dup.id = meta.id + "." + tissue
-                dup.network_id = meta.network_id + "." + tissue
-                [dup, network, tissue]
+                dup.id = meta.id + "." + tissue + "." + source + "." + threshold
+                dup.network_id = meta.network_id + "." + tissue + "." + source + "." + threshold
+                [dup, network, tissue, source, threshold]
             }
         ch_tissue_specific_network.view()
         ch_tissue_specific_seeds = ch_tissue_specific_input
-            .map{seeds, network, tissue ->
-                def tissue_specific_id = seeds.baseName + network.baseName + "." + tissue
-                [[id: tissue_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + tissue], seeds]
+            .map{seeds, network, tissue, source, threshold ->
+                def tissue_specific_id = seeds.baseName + network.baseName + "." + tissue + "." + source + "." + threshold
+                [[id: tissue_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + tissue + "." + source + "." + threshold], seeds]
             }
         TISSUE_SPECIFIC_FILTERING(ch_tissue_specific_network)
         ch_versions = ch_versions.mix(TISSUE_SPECIFIC_FILTERING.out.versions)

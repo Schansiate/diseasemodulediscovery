@@ -108,11 +108,11 @@ workflow PIPELINE_INITIALISATION {
     shortest_paths_param_set = (params.shortest_paths != null)
     perturbed_networks_param_set = (params.perturbed_networks != null)
     tissue_param_set = (params.tissue != null)
-
+    source_param_set = (params.filtering_source != null)
     if(params.input){
 
         // check if seeds or network parameters are set and if so, throw an error since they cannot be used together with the sample sheet
-        if (seed_param_set || network_param_set || shortest_paths_param_set || perturbed_networks_param_set){
+        if (seed_param_set || network_param_set || shortest_paths_param_set || perturbed_networks_param_set || tissue_param_set || source_param_set) {
             error("You need to specify either a sample sheet (--input) OR the seeds (--seeds) and network (--network) files (including the shortest paths and perturbed networks if the network is set via the sample sheet). You cannot specify both at the same time.")
         }
 
@@ -123,14 +123,14 @@ workflow PIPELINE_INITIALISATION {
         // channel: [ path(seeds), path(network), path(shortest_paths), path(perturbed_networks) ]
         ch_input = Channel
             .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
-            .map{seeds, network, shortest_paths, perturbed_networks, tissue ->
+            .map{seeds, network, shortest_paths, perturbed_networks, tissue, source, threshold ->
                 if((seeds.size()==0)){
                     error("No seeds files specified in the sample sheet")
                 }
                 if((network.size()==0)){
                     error("No network file specified in the sample sheet")
                 }
-                [seeds, network, shortest_paths, perturbed_networks, tissue]
+                [seeds, network, shortest_paths, perturbed_networks, tissue, source, threshold]
             }
 
         log.info("Creating network and seeds channels based on tuples in the sample sheet")
@@ -152,14 +152,20 @@ workflow PIPELINE_INITIALISATION {
                 def network_id = mapPreparedNetwork(network, params.id_space).baseName
                 [ [ id: seeds.baseName + "." + network_id, seeds_id: seeds.baseName, network_id: network_id ] , seeds ]
             }
+            .unique()
 
         ch_tissue_specific_input = ch_input
             .flatMap{it ->
                 def seeds = it[0]
                 def network = mapPreparedNetwork(it[1], params.id_space)
                 def tissues = it[4] instanceof String ? it[4].split(";") : []
+                def row_source = it[5] instanceof String ? it[5] : null
+                def row_threshold = it[6]
+                if(tissues.size() > 0 && (!row_source || row_threshold == null)){
+                    error("Sample sheet row for seeds '${seeds}' and network '${network}' specifies a tissue but no source and/or threshold. 'tissue', 'source' and 'threshold' must all be specified together in the sample sheet.")
+                }
                 tissues.collect{ tissue ->
-                    [seeds, network, tissue]
+                    [seeds, network, tissue, row_source, row_threshold]
                 }
             }
 
@@ -185,6 +191,8 @@ workflow PIPELINE_INITIALISATION {
                 .fromPath(params.seeds.split(',').flatten(), checkIfExists: true)
                 .combine(ch_network.map{_meta, network -> network})
                 .combine(params.tissue.split(",").flatten())
+                .combine(Channel.value(params.filtering_source))
+                .combine(Channel.value(params.filtering_threshold))
         } else {
             ch_tissue_specific_input = Channel.empty()
         }
@@ -246,7 +254,7 @@ workflow PIPELINE_INITIALISATION {
     network     = ch_network                    // channel: [ val(meta[id,network_id]), path(network) ]
     shortest_paths = ch_shortest_paths          // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     perturbed_networks = ch_perturbed_networks    // channel: [ val(meta[id,network_id]), [path(perturbed_network)] ]
-    tissue_specific_input = ch_tissue_specific_input // channel [path(seeds), path(network), val(tissue)]
+    tissue_specific_input = ch_tissue_specific_input // channel [path(seeds), path(network), val(tissue), val(source), val(threshold)]
 }
 
 /*
