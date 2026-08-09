@@ -86,18 +86,25 @@ def visualize_expression(args, g, pos):
     expr = g.vp[expression_property]
     values = np.array([float(expr[v]) for v in g.vertices()], dtype=float)
 
-    vmin = values.min()
-    vmax = values.max()
-    if vmin == vmax:
-        vmin -= 0.5
-        vmax += 0.5
+    # LogNorm requires strictly positive values; floor non-positive
+    # expression (e.g. TPM == 0) to a small positive epsilon so it still
+    # maps to the low end of the color scale instead of erroring out.
+    positive_values = values[values > 0]
+    floor = positive_values.min() / 10 if positive_values.size else 1e-3
+    plot_values = np.clip(values, floor, None)
 
-    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    vmin = plot_values.min()
+    vmax = plot_values.max()
+    if vmin == vmax:
+        vmin /= 10
+        vmax *= 10
+
+    norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
     cmap = mpl.colormaps["Reds"]
 
     vertex_fill_color = g.new_vertex_property("vector<double>")
-    for v in g.vertices():
-        vertex_fill_color[v] = cmap(norm(float(expr[v])))
+    for v, value in zip(g.vertices(), plot_values):
+        vertex_fill_color[v] = cmap(norm(value))
 
     vertex_shape = g.new_vertex_property("string")
     vertex_aspect = g.new_vertex_property("double")
@@ -119,6 +126,9 @@ def visualize_expression(args, g, pos):
         vertex_shape=vertex_shape,
         vertex_aspect=vertex_aspect,
         vertex_size=18,
+        vertex_text=g.vp["label_node"],
+        vertex_text_color=g.vp["text_color"],
+        vertex_font_size=compute_font_size(g.num_vertices(), "png"),
         bg_color="white",
         output_size=(800, 800),
         output=str(raw_output),
@@ -132,7 +142,7 @@ def visualize_expression(args, g, pos):
     sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax, fraction=0.035, pad=0.02)
-    cbar.set_label("Expression value")
+    cbar.set_label("Expression value (log scale)")
 
     fig.savefig(output, bbox_inches="tight")
     plt.close(fig)
