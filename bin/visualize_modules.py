@@ -74,12 +74,12 @@ def add_drugs(args, g, node_mapping):
 
 
 def visualize_expression(args, g, pos):
-    """Visualize tissue expression values as a PNG, if present."""
-    expression_property = "expression_in_tissue"
+    """Visualize context expression values as a PNG, if present."""
+    expression_property = "expression_in_context"
     if expression_property not in g.vp:
         logger.info(
             "Skipping expression visualization because the graph has no "
-            "'expression_in_tissue' vertex property."
+            "'expression_in_context' vertex property."
         )
         return
 

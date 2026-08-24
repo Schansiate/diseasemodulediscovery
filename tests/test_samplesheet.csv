@@ -1,6 +1,6 @@
-seeds,network,tissue,source,threshold
+seeds,network,context,source,threshold
 tests/entrez_seeds_1.csv,string_physical_min900,Lung;Bladder,GTEx,4
-tests/entrez_seeds_1.csv,string_physical_min900,Lung,GTEx,2
+tests/entrez_seeds_1.csv,string_physical_min900,Lung,GTEx,0.3
 tests/entrez_seeds_2.csv,string_physical_min900,,,
 tests/entrez_seeds_2.csv,string_physical_min900,Lung,PAXDB,1
 tests/entrez_seeds_1.csv,string_physical_min900,TCGA_GBM,TCGA,3

@@ -62,13 +62,12 @@ def save_expression_distribution(input_files, header_file):
         mqc_payload = yaml.safe_load(header) or {}
 
     data = {}
-    threshold = None
+    thresholds_by_value = {}
 
     for file in input_files:
         with open(file, "r", encoding="utf-8") as distribution_file:
             distribution = yaml.safe_load(distribution_file) or {}
 
-        network_name = distribution.get("name") or file.stem
         dist_data = distribution.get("data")
 
         if dist_data is None:
@@ -76,20 +75,35 @@ def save_expression_distribution(input_files, header_file):
                 f"Invalid distribution YAML in {file}: expected key 'data'"
             )
 
-        data[network_name] = dist_data
-        if threshold is None:
-            threshold = distribution.get("threshold")
+        context = distribution.get("context")
+        source = distribution.get("source")
+        threshold = distribution.get("threshold")
 
-    if threshold is not None:
-        mqc_payload.setdefault("pconfig", {})["x_lines"] = [
-            {
-                "value": threshold,
-                "color": "#e74c3c",
-                "width": 2,
-                "dash": "dash",
-                "label": f"Threshold ({threshold})",
-            }
-        ]
+        if context is not None and source is not None and threshold is not None:
+            line_name = f"{context}.{source}.{threshold}"
+        else:
+            line_name = distribution.get("name") or file.stem
+
+        data[line_name] = dist_data
+
+        if threshold is not None:
+            thresholds_by_value.setdefault(threshold, []).append(line_name)
+
+    if thresholds_by_value:
+        x_lines = []
+        for value, names in sorted(thresholds_by_value.items()):
+            label = f"Threshold ({value})" if len(names) == len(input_files) else (
+                f"Threshold ({value}): {', '.join(names)}"
+            )
+            x_lines.append(
+                {
+                    "value": value,
+                    "width": 2,
+                    "dash": "dash",
+                    "label": label,
+                }
+            )
+        mqc_payload.setdefault("pconfig", {})["x_lines"] = x_lines
 
     mqc_payload["data"] = data
 

@@ -487,9 +487,9 @@
             "type": "boolean",
             "description": "flag for running network expansion tools on filtered networks only"
         },
-        "tissue": {
+        "context": {
             "type": "string",
-            "description": "tissues to filter for"
+            "description": "contexts to filter for"
         },
         "filtering_source": {
             "type": "string",

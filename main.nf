@@ -34,7 +34,7 @@ workflow NFCORE_DISEASEMODULEDISCOVERY {
     ch_network              // channel: [ val(meta[id,network_id]), path(network) ]
     ch_shortest_paths       // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     ch_perturbed_networks    // channel: [ val(meta[id,network_id]), [path(perturbed_networks)] ]
-    ch_tissue_specific_input // channel: [path(seeds), path(network), val(tissue)]
+    ch_context_specific_input // channel: [path(seeds), path(network), val(context)]
 
     main:
 
@@ -53,7 +53,7 @@ workflow NFCORE_DISEASEMODULEDISCOVERY {
         ch_network,
         ch_shortest_paths,
         ch_perturbed_networks,
-        ch_tissue_specific_input
+        ch_context_specific_input
     )
     ch_versions = ch_versions.mix(DISEASEMODULEDISCOVERY.out.versions)
 
@@ -97,7 +97,7 @@ workflow {
         PIPELINE_INITIALISATION.out.network,
         PIPELINE_INITIALISATION.out.shortest_paths,
         PIPELINE_INITIALISATION.out.perturbed_networks,
-        PIPELINE_INITIALISATION.out.tissue_specific_input
+        PIPELINE_INITIALISATION.out.context_specific_input
         )
 
     //

@@ -22,7 +22,7 @@ include { MODULEOVERLAP                     } from '../modules/local/moduleoverl
 include { DRUGPREDICTIONS                   } from '../modules/local/drugpredictions/main'
 include { TOPOLOGY                          } from '../modules/local/topology/main'
 include { DRUGSTONEEXPORT                   } from '../modules/local/drugstoneexport/main'
-include { TISSUE_SPECIFIC_FILTERING         } from '../modules/local/tissue_specific_filtering/main'
+include { CONTEXT_SPECIFIC_FILTERING         } from '../modules/local/context_specific_filtering/main'
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
@@ -119,7 +119,7 @@ workflow DISEASEMODULEDISCOVERY {
     ch_network              // channel: [ val(meta[id,network_id]), path(network) ]
     ch_shortest_paths       // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     ch_perturbed_networks    // channel: [ val(meta[id,network_id]), [path(perturbed_networks)] ]
-    ch_tissue_specific_input // channel: [path(seeds), path(network), val(tissue), val(source), val(threshold)]
+    ch_context_specific_input // channel: [path(seeds), path(network), val(context), val(source), val(threshold)]
     main:
 
     // Params
@@ -144,34 +144,34 @@ workflow DISEASEMODULEDISCOVERY {
     ch_network_multiqc = GRAPHTOOLPARSER.out.multiqc
         .map{ meta, path -> path }
     ch_network_gt = GRAPHTOOLPARSER.out.network
-    //Tissue specific filtering
-    if(ch_tissue_specific_input.ifEmpty(false)){
-        ch_tissue_specific_input.view()
-        ch_tissue_specific_network = ch_tissue_specific_input
-            .map{_seeds, network, tissue, source, threshold ->
-                [network.baseName, tissue, source, threshold]
+    //Context specific filtering
+    if(ch_context_specific_input.ifEmpty(false)){
+        ch_context_specific_input.view()
+        ch_context_specific_network = ch_context_specific_input
+            .map{_seeds, network, context, source, threshold ->
+                [network.baseName, context, source, threshold]
             }
             .combine(
                 ch_network_gt.map{meta, network -> [meta.network_id, meta, network]},
                 by: 0
             )
-            .map{ _network_id, tissue, source, threshold, meta, network ->
+            .map{ _network_id, context, source, threshold, meta, network ->
                 def dup = meta.clone()
-                dup.id = meta.id + "." + tissue + "." + source + "." + threshold
-                dup.network_id = meta.network_id + "." + tissue + "." + source + "." + threshold
-                [dup, network, tissue, source, threshold]
+                dup.id = meta.id + "." + context + "." + source + "." + threshold
+                dup.network_id = meta.network_id + "." + context + "." + source + "." + threshold
+                [dup, network, context, source, threshold]
             }
-        ch_tissue_specific_network.view()
-        ch_tissue_specific_seeds = ch_tissue_specific_input
-            .map{seeds, network, tissue, source, threshold ->
-                def tissue_specific_id = seeds.baseName + network.baseName + "." + tissue + "." + source + "." + threshold
-                [[id: tissue_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + tissue + "." + source + "." + threshold], seeds]
+        ch_context_specific_network.view()
+        ch_context_specific_seeds = ch_context_specific_input
+            .map{seeds, network, context, source, threshold ->
+                def context_specific_id = seeds.baseName + network.baseName + "." + context + "." + source + "." + threshold
+                [[id: context_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + context + "." + source + "." + threshold], seeds]
             }
-        TISSUE_SPECIFIC_FILTERING(ch_tissue_specific_network)
-        ch_versions = ch_versions.mix(TISSUE_SPECIFIC_FILTERING.out.versions)
-        ch_tissue_specific_network = TISSUE_SPECIFIC_FILTERING.out.filtered_network
-        ch_filtering_statistic = TISSUE_SPECIFIC_FILTERING.out.filtering_statistic
-            .map({ meta, path -> path })
+        CONTEXT_SPECIFIC_FILTERING(ch_context_specific_network)
+        ch_versions = ch_versions.mix(CONTEXT_SPECIFIC_FILTERING.out.versions)
+        ch_context_specific_network = CONTEXT_SPECIFIC_FILTERING.out.filtered_network
+        ch_filtering_statistic = CONTEXT_SPECIFIC_FILTERING.out.filtering_statistic
+            .map({ _meta, path -> path })
             .collectFile(
                 cache: false,
                 storeDir: "${params.outdir}/mqc_summaries",
@@ -180,17 +180,17 @@ workflow DISEASEMODULEDISCOVERY {
             )
         ch_multiqc_files = ch_multiqc_files.mix(ch_filtering_statistic)
         if(params.run_filtered_networks_only){
-            ch_network_gt = ch_tissue_specific_network
-            ch_seeds = ch_tissue_specific_seeds
-            ch_network_multiqc = TISSUE_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path }
-            ch_perturbed_networks = ch_tissue_specific_network.map{meta, _path -> [meta, []]}
-            ch_shortest_paths = ch_tissue_specific_network.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]}
+            ch_network_gt = ch_context_specific_network
+            ch_seeds = ch_context_specific_seeds
+            ch_network_multiqc = CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path }
+            ch_perturbed_networks = ch_context_specific_network.map{meta, _path -> [meta, []]}
+            ch_shortest_paths = ch_context_specific_network.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]}
         }else{
-            ch_network_gt = ch_network_gt.mix(ch_tissue_specific_network)
-            ch_seeds = ch_seeds.mix(ch_tissue_specific_seeds)
-            ch_network_multiqc = ch_network_multiqc.mix(TISSUE_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path })
-            ch_perturbed_networks = ch_perturbed_networks.mix(ch_tissue_specific_network.map{meta, _path -> [meta, []]})
-            ch_shortest_paths = ch_shortest_paths.mix(ch_tissue_specific_network.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]})
+            ch_network_gt = ch_network_gt.mix(ch_context_specific_network)
+            ch_seeds = ch_seeds.mix(ch_context_specific_seeds)
+            ch_network_multiqc = ch_network_multiqc.mix(CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path })
+            ch_perturbed_networks = ch_perturbed_networks.mix(ch_context_specific_network.map{meta, _path -> [meta, []]})
+            ch_shortest_paths = ch_shortest_paths.mix(ch_context_specific_network.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]})
         }
     }
 
@@ -634,7 +634,7 @@ workflow DISEASEMODULEDISCOVERY {
 
     // Format complex MultiQC input files
     ch_multiqc_formatter_input = GRAPHTOOLPARSER.out.node_degree
-        .mix(TISSUE_SPECIFIC_FILTERING.out.node_degree)
+        .mix(CONTEXT_SPECIFIC_FILTERING.out.node_degree)
         .map{_meta, path -> path}
         .collect()
         .map{networks ->
@@ -642,7 +642,7 @@ workflow DISEASEMODULEDISCOVERY {
             [header, networks]
         }
         .mix(
-            TISSUE_SPECIFIC_FILTERING.out.expression_distribution
+            CONTEXT_SPECIFIC_FILTERING.out.expression_distribution
                 .map{ _meta, path -> path }
                 .collect()
                 .map{ files ->

@@ -204,12 +204,12 @@ custom_data:
     headers:
       network:
         title: "Network"
-        description: "Input network that was filtered for this tissue."
-      tissue:
-        title: "Tissue"
-        description: "GTEx tissue used for filtering the network."
-      genes_in_tissue:
-        title: "Genes in tissue"
+        description: "Input network that was filtered for this context."
+      context:
+        title: "Context"
+        description: "Context (e.g. tissue) used for filtering the network."
+      genes_in_context:
+        title: "Genes in context"
         description: "Number of genes in the expression file with expression above the specified threshold."
         format: "{:.0f}"
       genes_not_in_network_absolute:
