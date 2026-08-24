@@ -35,6 +35,12 @@ workflow PIPELINE_INITIALISATION {
     help              // boolean: Display help message and exit
     help_full         // boolean: Show the full help message
     show_hidden       // boolean: Show hidden parameters in the help message
+    param_input             //  string: Path to input samplesheet
+    param_seeds             //  string: Path(s) to seed genes file(s)
+    param_network           //  string: Path(s) to network file(s)
+    param_perturbed_networks //  string: Path(s) to perturbed networks file
+    param_prepared_networks_url //  string: URL to prepared networks
+    param_id_space          //  string: ID space to use for prepared networks
 
     main:
 
@@ -98,9 +104,12 @@ workflow PIPELINE_INITIALISATION {
         nextflow_cli_args
     )
 
+    def prepared_networks_url = param_prepared_networks_url
+    def network_map = loadYamlAsMap("${param_prepared_networks_url}network_map.yaml")
+    def id_space_map = loadYamlAsMap("${prepared_networks_url}id_space_map.yaml")
+
     ch_seeds = Channel.empty()          // channel: [ val(meta[id,seeds_id,network_id]), path(seeds) ]
     ch_network = Channel.empty()        // channel: [ val(meta[id,network_id]), path(network) ]
-    ch_shortest_paths = Channel.empty() // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     ch_perturbed_networks = Channel.empty() // channel: [ val(meta[id,network_id]), [path(perturbed_network)] ]
 
     seed_param_set = (params.seeds != null)
@@ -120,7 +129,7 @@ workflow PIPELINE_INITIALISATION {
         // Create channel from input file provided through params.input
         //
 
-        // channel: [ path(seeds), path(network), path(shortest_paths), path(perturbed_networks) ]
+        // channel: [ path(seeds), path(network), path(perturbed_networks) ]
         ch_input = Channel
             .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
             .map{seeds, network, shortest_paths, perturbed_networks, context, source, threshold ->
@@ -135,13 +144,13 @@ workflow PIPELINE_INITIALISATION {
 
         log.info("Creating network and seeds channels based on tuples in the sample sheet")
 
-        ch_network = ch_input
-            .map{ it -> [it[1], it[2], it[3]]}
-            .map{ network, sp, perturbed_networks ->
-                [ mapPreparedNetwork(network, params.id_space), sp, perturbed_networks ]
+       ch_network = ch_input
+            .map{ it -> [it[1], it[2]]}
+            .map{ network, perturbed_networks ->
+                [ mapPreparedNetwork(network_map, id_space_map, prepared_networks_url, network, param_id_space), perturbed_networks ]
             }
-            .map{ network, sp, perturbed_networks ->
-                [ [ id: network.baseName, network_id: network.baseName ], network, sp, perturbed_networks ]
+            .map{ network, perturbed_networks ->
+                [ [ id: network.baseName, network_id: network.baseName ], network, perturbed_networks ]
             }
             .unique()
 
@@ -149,7 +158,7 @@ workflow PIPELINE_INITIALISATION {
             .map{ it ->
                 def seeds = it[0]
                 def network = it[1]
-                def network_id = mapPreparedNetwork(network, params.id_space).baseName
+                def network_id = mapPreparedNetwork(network_map, id_space_map, prepared_networks_url, network, param_id_space).baseName
                 [ [ id: seeds.baseName + "." + network_id, seeds_id: seeds.baseName, network_id: network_id ] , seeds ]
             }
             .unique()
@@ -173,14 +182,13 @@ workflow PIPELINE_INITIALISATION {
 
         log.info("Creating network and seeds channels based on the combination of all seed and network files provided")
 
-        //create network channel from the provided argument
-        ch_network = Channel.fromList(params.network.split(',').flatten())
-            .map{network -> mapPreparedNetwork(network, params.id_space)}
+        ch_network = Channel.fromList(param_network.split(',').flatten())
+            .map{network -> mapPreparedNetwork(network_map, id_space_map, prepared_networks_url, network, param_id_space)}
             .map{ it -> [ [ id: it.baseName, network_id: it.baseName ], it ] }
-        //create seeds channel from the provided argument and combine with network channel to create an ID for each seed-network combination
+
         ch_seeds = Channel
-            .fromPath(params.seeds.split(',').flatten(), checkIfExists: true)
-            .combine(ch_network.map{meta, network -> meta.network_id})
+            .fromPath(param_seeds.split(',').flatten(), checkIfExists: true)
+            .combine(ch_network.map{meta, _network -> meta.network_id})
             .map{seeds, network_id ->
                 [ [ id: seeds.baseName + "." + network_id, seeds_id: seeds.baseName, network_id: network_id ] , seeds ]
             }
@@ -197,24 +205,14 @@ workflow PIPELINE_INITIALISATION {
             ch_context_specific_input = Channel.empty()
         }
 
-        // Add sp files, if provided (currently does not check if the number of the shortest paths matches the number of the networks and does not work with missing values)
-        if(shortest_paths_param_set){
-            ch_network = ch_network.merge(
-                Channel
-                .fromPath(params.shortest_paths.split(',').flatten())
-            )
-        } else{
-            ch_network = ch_network.map{meta, network -> [meta, network, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]}
-        }
-
-        // Add perturbed network folders, if provided (currently does not check if the number of the shortest paths matches the number of the networks and does not work with missing values)
+        // Add perturbed network folders, if provided (currently does not check if the number of the perturbed networks matches the number of the networks and does not work with missing values)
         if(perturbed_networks_param_set){
             ch_network = ch_network.merge(
                 Channel
-                .fromPath(params.perturbed_networks.split(',').flatten())
+                .fromPath(param_perturbed_networks.split(',').flatten())
             )
         } else{
-            ch_network = ch_network.map{meta, network, sp -> [meta, network, sp, []]}
+            ch_network = ch_network.map{meta, network -> [meta, network, []]}
         }
 
 
@@ -223,36 +221,29 @@ workflow PIPELINE_INITIALISATION {
     }
 
     // check if IDs are unique
-    ch_network.map{ meta, network, sp, perturbed_networks -> [meta.id] }
+    ch_network.map{ meta, _network, _perturbed_networks -> [meta.id] }
         .collect()
         .subscribe { list ->
             def unique = list.size() == list.toSet().size()
             if (!unique) { error("IDs in ch_network are not unique.") }
         }
-    ch_seeds.map{ meta, seeds -> [meta.id] }
+    ch_seeds.map{ meta, _seeds -> [meta.id] }
         .collect()
         .subscribe { list ->
             def unique = list.size() == list.toSet().size()
             if (!unique) { error("IDs in ch_seeds are not unique.") }
         }
 
-    // separate network channel into network, shoretes_paths, and perturbed_networks
-    ch_shortest_paths = ch_network.map{meta, network, sp, perturbed_networks ->
-        [meta, sp.size() > 0 ? sp : file("${projectDir}/assets/NO_FILE", checkIfExists: true)]
-    }
-
-    ch_perturbed_networks = ch_network.map{meta, network, sp, perturbed_networks ->
+    ch_perturbed_networks = ch_network.map{meta, _network, perturbed_networks ->
         [meta, perturbed_networks.size() > 0 ? file(perturbed_networks+"/*.gt") : []]
     }
 
-    ch_network = ch_network.map{meta, network, sp, perturbed_networks -> [meta, network]}
-
+    ch_network = ch_network.map{meta, network, _perturbed_networks -> [meta, network]}
 
     emit:
     versions    = ch_versions
     seeds       = ch_seeds                      // channel: [ val(meta[id,seeds_id,network_id]), path(seeds) ]
     network     = ch_network                    // channel: [ val(meta[id,network_id]), path(network) ]
-    shortest_paths = ch_shortest_paths          // channel: [ val(meta[id,network_id]), path(shortest_paths) ]
     perturbed_networks = ch_perturbed_networks    // channel: [ val(meta[id,network_id]), [path(perturbed_network)] ]
     context_specific_input = ch_context_specific_input // channel [path(seeds), path(network), val(context), val(source), val(threshold)]
 }
@@ -341,36 +332,26 @@ workflow PIPELINE_COMPLETION {
 */
 
 //
+// Load a YAML file and return its content as a map
+//
+def loadYamlAsMap(path) {
+    def yaml = new  org.yaml.snakeyaml.Yaml()
+    def parsed = yaml.load(file(path, checkIfExists: true).text)
+
+    assert parsed instanceof Map : "YAML root must be a dictionary"
+    return parsed
+}
+
+//
 // Check if the network is a prepared network or a file
 //
-def mapPreparedNetwork(network, id_space) {
-
-    def prepared_networks_url = "https://zenodo.org/records/15049754/files/"
-    def network_map = [
-        string_min900: "string.human_links_v12_0_min900",
-        string_min700: "string.human_links_v12_0_min700",
-        string_physical_min900: "string.human_physical_links_v12_0_min900",
-        string_physical_min700: "string.human_physical_links_v12_0_min700",
-        biogrid: "biogrid.4_4_242_homo_sapiens",
-        hippie_high_confidence: "hippie.v2_3_high_confidence",
-        hippie_medium_confidence:"hippie.v2_3_medium_confidence",
-        iid: "iid.human",
-        nedrex: "nedrex.reviewed_proteins_exp",
-        nedrex_high_confidence: "nedrex.reviewed_proteins_exp_high_confidence",
-    ]
-    def id_space_map = [
-        entrez: "Entrez",
-        ensembl: "Ensembl",
-        symbol: "Symbol",
-        uniprot: "UniProtKB-AC",
-    ]
+def mapPreparedNetwork(network_map, id_space_map, prepared_networks_url, network, id_space) {
     if (network_map.containsKey(network)) {
         return file("${prepared_networks_url}${network_map[network]}.${id_space_map[id_space]}.gt", checkIfExists: true)
     } else {
         return file(network, checkIfExists: true)
     }
 }
-
 //
 // Read a tsv file and return its content as a list of groovy maps
 //

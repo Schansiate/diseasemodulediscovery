@@ -33,7 +33,7 @@ The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes d
 - [Disease module evaluation](#disease-module-evaluation)
   - [g:Profiler](#gprofiler)
   - [DIGEST](#digest)
-  - [Network topology](#topology)
+  - [Network topology](#network-topology)
   - [Overlap](#overlap)
   - [Seed perturbation](#seed-perturbation)
   - [Network perturbation](#network-perturbation)
@@ -94,7 +94,7 @@ In addition to the inferred disease modules, the pipeline provides a dummy modul
 <details markdown="1">
 <summary>Output files</summary>
 
-- `modules/{gt,graphml,tsv_nodes,tsv_edges}/`
+- `disease_modules/{gt,graphml,tsv_nodes,tsv_edges}/`
   - `<seeds>.<network>.no_tool.{gt,grahml,nodes.tsv,edges.tsv}`: Module containing only the seed nodes in different formats.
 
 </details>
@@ -106,7 +106,7 @@ In addition to the inferred disease modules, the pipeline provides a dummy modul
 <details markdown="1">
 <summary>Output files</summary>
 
-- `modules/{gt,graphml,tsv_nodes,tsv_edges}/`
+- `disease_modules/{gt,graphml,tsv_nodes,tsv_edges}/`
   - `<seeds>.<network>.domino.{gt,grahml,nodes.tsv,edges.tsv}`: DOMINO module in different formats.
 
 </details>
@@ -118,7 +118,7 @@ In addition to the inferred disease modules, the pipeline provides a dummy modul
 <details markdown="1">
 <summary>Output files</summary>
 
-- `modules/{gt,graphml,tsv_nodes,tsv_edges}/`
+- `disease_modules/{gt,graphml,tsv_nodes,tsv_edges}/`
   - `<seeds>.<network>.diamond.{gt,grahml,nodes.tsv,edges.tsv}`: DIAMOnD module in different formats.
 
 </details>
@@ -130,7 +130,7 @@ In addition to the inferred disease modules, the pipeline provides a dummy modul
 <details markdown="1">
 <summary>Output files</summary>
 
-- `modules/{gt,graphml,tsv_nodes,tsv_edges}/`
+- `disease_modules/{gt,graphml,tsv_nodes,tsv_edges}/`
   - `<seeds>.<network>.robust.{gt,grahml,nodes.tsv,edges.tsv}`: ROBUST module in different formats.
 
 </details>
@@ -142,7 +142,7 @@ In addition to the inferred disease modules, the pipeline provides a dummy modul
 <details markdown="1">
 <summary>Output files</summary>
 
-- `modules/{gt,graphml,tsv_nodes,tsv_edges}/`
+- `disease_modules/{gt,graphml,tsv_nodes,tsv_edges}/`
   - `<seeds>.<network>.robust_bias_aware.{gt,grahml,nodes.tsv,edges.tsv}`: ROBUST (bias-aware) module in different formats.
 
 </details>
@@ -152,7 +152,7 @@ In addition to the inferred disease modules, the pipeline provides a dummy modul
 <details markdown="1">
 <summary>Output files</summary>
 
-- `modules/{gt,graphml,tsv_nodes,tsv_edges}/`
+- `disease_modules/{gt,graphml,tsv_nodes,tsv_edges}/`
   - `<seeds>.<network>.rwr.{gt,grahml,nodes.tsv,edges.tsv}`: RWR module in different formats.
 
 </details>
@@ -164,7 +164,7 @@ In addition to the inferred disease modules, the pipeline provides a dummy modul
 <details markdown="1">
 <summary>Output files</summary>
 
-- `modules/{gt,graphml,tsv_nodes,tsv_edges}/`
+- `disease_modules/{gt,graphml,tsv_nodes,tsv_edges}/`
   - `<seeds>.<network>.firstneighbor.{gt,grahml,nodes.tsv,edges.tsv}`: 1st Neighbors module in different formats.
 
 </details>
@@ -175,33 +175,21 @@ In addition to the inferred disease modules, the pipeline provides a dummy modul
 
 [g:Profiler](https://biit.cs.ut.ee/gprofiler/gost) is used via the R package [gprofiler2](https://cran.r-project.org/web/packages/gprofiler2/index.html) to perform over-representation analysis (ORA), i.e., to find gene sets of pathways in which the module nodes are enriched. For this, the module nodes are used as foreground, and all nodes of the corresponding input network as background.
 
-The analysis is run twice per module:
-
-- **All module nodes** – the complete module, including seed nodes, is used as foreground.
-- **Added nodes only** – only the nodes added during module expansion (seed nodes excluded) are used as foreground.
-
-A custom GMT file can be provided via `--custom_gmt_file` (see [usage documentation](usage.md#overrepresentation-analysis)).
-
 <details markdown="1">
 <summary>Output files</summary>
 
 Output file documentation is based on the nf-core module [gprofiler2_gost](https://nf-co.re/modules/gprofiler2_gost/).
 
 - `evaluation/gprofiler/<seeds>.<network>.<amim>/`
-  - `<seeds>.<network>.<amim>.gprofiler2.all_enriched_pathways.tsv`: Table listing all enriched pathways found using all module nodes as foreground.
-  - `<seeds>.<network>.<amim>.gprofiler2.gostplot.html`: Interactive Manhattan plot of all enriched pathways (all module nodes).
-  - `<seeds>.<network>.<amim>.gprofiler2.gostplot.png`: Manhattan plot of all enriched pathways (all module nodes).
-  - `<seeds>.<network>.<amim>.gprofiler2.gost_results.rds`: R object containing the results of the gost query (all module nodes).
-  - `<seeds>.<network>.<amim>.gprofiler2.<source>.sub_enriched_pathways.tsv`: Table listing enriched pathways from one particular source (all module nodes).
-  - `<seeds>.<network>.<amim>.gprofiler2.<source>.sub_enriched_pathways.png`: Bar plot of enriched pathways per source (all module nodes).
-  - `<seeds>.<network>.<amim>.added_nodes.gprofiler2.all_enriched_pathways.tsv`: Table listing all enriched pathways found using only the added (non-seed) module nodes as foreground.
-  - `<seeds>.<network>.<amim>.added_nodes.gprofiler2.gostplot.html`: Interactive Manhattan plot of all enriched pathways (added nodes only).
-  - `<seeds>.<network>.<amim>.added_nodes.gprofiler2.gostplot.png`: Manhattan plot of all enriched pathways (added nodes only).
-  - `<seeds>.<network>.<amim>.added_nodes.gprofiler2.gost_results.rds`: R object containing the results of the gost query (added nodes only).
-  - `<seeds>.<network>.<amim>.added_nodes.gprofiler2.<source>.sub_enriched_pathways.tsv`: Table listing enriched pathways from one particular source (added nodes only).
-  - `<seeds>.<network>.<amim>.added_nodes.gprofiler2.<source>.sub_enriched_pathways.png`: Bar plot of enriched pathways per source (added nodes only).
-  - `*ENSG_filtered.gmt`: GMT file that was provided as input or that was downloaded from g:Profiler if no custom GMT file was given; filtered for the selected datasources.
+  - `<seeds>.<network>.<amim>.gprofiler2.all_enriched_pathways.tsv`: Table listing all enriched pathways that were found.
+  - `<seeds>.<network>.<amim>.gprofiler2.gostplot.html`: Interactive Manhattan plot of all enriched pathways.
+  - `<seeds>.<network>.<amim>.gprofiler2.gostplot.png`: Manhattan plot of all enriched pathways.
+  - `<seeds>.<network>.<amim>.gprofiler2.gost_results.rds`: R object containing the results of the gost query.
+  - `<seeds>.<network>.<amim>.gprofiler2.<source>.sub_enriched_pathways.tsv`: Table listing enriched pathways that were found from one particular source.
+  - `<seeds>.<network>.<amim>.gprofiler2.<source>.sub_enriched_pathways.png`: Bar plot showing the fraction of genes that were found enriched in each pathway.
   - `R_sessionInfo.log`: Log file containing information about the R session that was run for this module.
+- `evaluation/gprofiler/`
+  - `*ENSG_filtered.gmt`: GMT file that was provided as input or that was downloaded from g:profiler if no input GMT file was given; filtered for the selected datasources.
 
 </details>
 
@@ -400,7 +388,7 @@ The resulting files have the following structure:
 <details markdown="1">
 <summary>Output files</summary>
 
-- `modules/biopax/`
+- `disease_modules/biopax/`
   - `<seeds>.<network>.<amim>.owl`: BioPax-files for each module in BioPax-format.
 
 - `reports/`
