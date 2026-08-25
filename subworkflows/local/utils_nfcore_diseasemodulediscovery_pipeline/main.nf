@@ -114,14 +114,13 @@ workflow PIPELINE_INITIALISATION {
 
     seed_param_set = (params.seeds != null)
     network_param_set = (params.network != null)
-    shortest_paths_param_set = (params.shortest_paths != null)
     perturbed_networks_param_set = (params.perturbed_networks != null)
     context_param_set = (params.context != null)
     source_param_set = (params.filtering_source != null)
     if(params.input){
 
         // check if seeds or network parameters are set and if so, throw an error since they cannot be used together with the sample sheet
-        if (seed_param_set || network_param_set || shortest_paths_param_set || perturbed_networks_param_set || context_param_set || source_param_set) {
+        if (seed_param_set || network_param_set || perturbed_networks_param_set || context_param_set || source_param_set) {
             error("You need to specify either a sample sheet (--input) OR the seeds (--seeds) and network (--network) files (including the shortest paths and perturbed networks if the network is set via the sample sheet). You cannot specify both at the same time.")
         }
 
@@ -132,14 +131,14 @@ workflow PIPELINE_INITIALISATION {
         // channel: [ path(seeds), path(network), path(perturbed_networks) ]
         ch_input = Channel
             .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
-            .map{seeds, network, shortest_paths, perturbed_networks, context, source, threshold ->
+            .map{seeds, network, perturbed_networks, context, source, threshold ->
                 if((seeds.size()==0)){
                     error("No seeds files specified in the sample sheet")
                 }
                 if((network.size()==0)){
                     error("No network file specified in the sample sheet")
                 }
-                [seeds, network, shortest_paths, perturbed_networks, context, source, threshold]
+                [seeds, network, perturbed_networks, context, source, threshold]
             }
 
         log.info("Creating network and seeds channels based on tuples in the sample sheet")
@@ -166,10 +165,10 @@ workflow PIPELINE_INITIALISATION {
         ch_context_specific_input = ch_input
             .flatMap{it ->
                 def seeds = it[0]
-                def network = mapPreparedNetwork(it[1], params.id_space)
-                def contexts = it[4] instanceof String ? it[4].split(";") : []
-                def row_source = it[5] instanceof String ? it[5] : null
-                def row_threshold = it[6]
+                def network = mapPreparedNetwork(network_map, id_space_map, prepared_networks_url, it[1], param_id_space)
+                def contexts = it[3] instanceof String ? it[3].split(";") : []
+                def row_source = it[4] instanceof String ? it[4] : null
+                def row_threshold = it[5]
                 if(contexts.size() > 0 && (!row_source || row_threshold == null)){
                     error("Sample sheet row for seeds '${seeds}' and network '${network}' specifies a context but no source and/or threshold. 'context', 'source' and 'threshold' must all be specified together in the sample sheet.")
                 }

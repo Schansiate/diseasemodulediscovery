@@ -476,7 +476,7 @@
         }
     ],
     "properties": {
-        "crapeome_filtering_threshold": {
+        "crapome_filtering_threshold": {
             "type": "integer",
             "description": "threshold for filtering for crapomes",
             "default": 1000,

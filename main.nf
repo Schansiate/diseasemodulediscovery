@@ -88,6 +88,30 @@ params {
     prepared_networks_url: String = 'https://zenodo.org/records/18702264/files/'
 
     //
+    // Context specific filtering
+    //
+    //threshold for filtering crapomes
+    crapome_filtering_threshold: Integer = 1000
+
+    //flag for filtering crapomes
+    filter_crapomes: Boolean
+
+    //expression threshold for context specific filtering
+    filtering_threshold: Float = 1.0
+
+    //flag for running network expansion tools on context-specific networks only 
+    run_filtered_networks_only: Boolean
+
+    //context to filter the networks 
+    context: String?
+
+    //source for the expression values used for filtering 
+    filtering_source: String?
+
+    //custom filtering source 
+    custom_filtering_file: String?
+
+    //
     // Network expansion
     //
     // Flag for skipping first neighbor
@@ -280,7 +304,7 @@ workflow {
     //
     // WORKFLOW: Run main workflow
     //
-    NFCORE_DISEASEMODULEDISCOVERY (PIPELINE_INITIALISATION.out.seeds, PIPELINE_INITIALISATION.out.network, PIPELINE_INITIALISATION.out.perturbed_networks, PIPELINE_INITIALISATION.out..context_specific_input)
+    NFCORE_DISEASEMODULEDISCOVERY (PIPELINE_INITIALISATION.out.seeds, PIPELINE_INITIALISATION.out.network, PIPELINE_INITIALISATION.out.perturbed_networks, PIPELINE_INITIALISATION.out.context_specific_input)
 
     //
     // SUBWORKFLOW: Run completion tasks

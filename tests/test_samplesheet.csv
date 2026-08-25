@@ -1,6 +1,6 @@
 seeds,network,context,source,threshold
-tests/entrez_seeds_1.csv,string_physical_min900,Lung;Bladder,GTEx,4
-tests/entrez_seeds_1.csv,string_physical_min900,Lung,GTEx,0.3
-tests/entrez_seeds_2.csv,string_physical_min900,,,
-tests/entrez_seeds_2.csv,string_physical_min900,Lung,PAXDB,1
-tests/entrez_seeds_1.csv,string_physical_min900,TCGA_GBM,TCGA,3
+https://raw.githubusercontent.com/nf-core/test-datasets/diseasemodulediscovery/small/entrez_seeds_1.csv,string_physical_min900,Lung;Bladder,GTEx,4.0
+https://raw.githubusercontent.com/nf-core/test-datasets/diseasemodulediscovery/small/entrez_seeds_1.csv,string_physical_min900,Lung,GTEx,0.3
+https://raw.githubusercontent.com/nf-core/test-datasets/diseasemodulediscovery/small/entrez_seeds_2.csv,string_physical_min900,,,
+https://raw.githubusercontent.com/nf-core/test-datasets/diseasemodulediscovery/small/entrez_seeds_2.csv,string_physical_min900,Lung,PAXDB,1.0
+https://raw.githubusercontent.com/nf-core/test-datasets/diseasemodulediscovery/small/entrez_seeds_1.csv,string_physical_min900,TCGA_GBM,TCGA,3.0

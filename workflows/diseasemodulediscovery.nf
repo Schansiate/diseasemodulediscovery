@@ -180,13 +180,11 @@ workflow DISEASEMODULEDISCOVERY {
             ch_seeds = ch_context_specific_seeds
             ch_network_multiqc = CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path }
             ch_perturbed_networks = ch_context_specific_network.map{meta, _path -> [meta, []]}
-            ch_shortest_paths = ch_context_specific_network.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]}
         }else{
             ch_network_gt = ch_network_gt.mix(ch_context_specific_network)
             ch_seeds = ch_seeds.mix(ch_context_specific_seeds)
             ch_network_multiqc = ch_network_multiqc.mix(CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path })
             ch_perturbed_networks = ch_perturbed_networks.mix(ch_context_specific_network.map{meta, _path -> [meta, []]})
-            ch_shortest_paths = ch_shortest_paths.mix(ch_context_specific_network.map{meta, _path -> [meta, file("${projectDir}/assets/NO_FILE", checkIfExists: true)]})
         }
     }
 
@@ -444,10 +442,10 @@ workflow DISEASEMODULEDISCOVERY {
 
             // Run gprofiler on all module nodes and on added (non-seed) nodes separately;
             // added_nodes entries carry a .added_nodes id suffix to distinguish their output files
-            ch_gprofiler_input = GT2TSV_Modules.out.all_nodes
+            ch_gprofiler_input = GT2TSV_MODULES.out.all_nodes
                 .map{ meta, path -> [meta.network_id, meta, path] }
                 .mix(
-                    GT2TSV_Modules.out.added_nodes
+                    GT2TSV_MODULES.out.added_nodes
                          .filter{ meta, _nodes -> meta.amim != "no_tool" } //filter out no_tool modules
                         .map{ meta, path ->
                             def dup = meta.clone()

@@ -35,7 +35,10 @@ def parse_args(argv=None):
     )
     parser.add_argument("--context", required=True, help="context to filter by")
     parser.add_argument(
-        "--threshold", type=float, default=0.1, help="expression threshold to filter by"
+        "--threshold",
+        type=str,
+        default="0.1",
+        help="expression threshold to filter by",
     )
     parser.add_argument(
         "--filtering_source",
@@ -169,17 +172,6 @@ def passes_threshold(expression, threshold, source):
     return expression > threshold
 
 
-def format_threshold(threshold):
-    """Formats threshold for use in filenames/ids the same way Nextflow
-    stringifies it when building the matching meta.id on the workflow side:
-    whole numbers (e.g. 1.0) are rendered without a trailing ".0" so that
-    "${meta.id}.gt", which nextflow expects as this process' output, matches
-    the file graph-tool actually writes."""
-    if float(threshold).is_integer():
-        return str(int(threshold))
-    return str(threshold)
-
-
 ID_SPACE_TARGET_NAMESPACES = {
     "ensembl": "ENSG",
     "entrez": "ENTREZGENE_ACC",
@@ -216,13 +208,14 @@ def convert_id_space(expression_df, id_space, source_space="ensembl"):
     return collapsed_result
 
 
-def save_expression_distribution(expression_by_context, stem, context, source, threshold):
+def save_expression_distribution(
+    expression_by_context, stem, context, source, threshold, threshold_label
+):
     values = expression_by_context["expression"]
     if values.empty:
         return
     percentiles = list(range(0, 101))
     pct_values = [float(values.quantile(p / 100)) for p in percentiles]
-    threshold_label = format_threshold(threshold)
     distribution = {
         "name": f"{stem}.{context}.{source}.{threshold_label}",
         "context": context,
@@ -236,7 +229,8 @@ def save_expression_distribution(expression_by_context, stem, context, source, t
         yaml.safe_dump(distribution, f, sort_keys=False, default_flow_style=None)
 
 
-def filter_network(network_file, threshold, expression_by_context, context, source):
+def filter_network(network_file, threshold_label, expression_by_context, context, source):
+    threshold = float(threshold_label)
     network = gt.load_graph(network_file)
     stem = Path(network_file).stem
     name_index = utils.name2index(network)
@@ -272,8 +266,10 @@ def filter_network(network_file, threshold, expression_by_context, context, sour
     network.purge_vertices()
     network.clear_filters()
     del network.vp["context_filter"]
-    network.save(f"{stem}.{context}.{source}.{format_threshold(threshold)}.gt")
-    save_expression_distribution(in_network_expression, stem, context, source, threshold)
+    network.save(f"{stem}.{context}.{source}.{threshold_label}.gt")
+    save_expression_distribution(
+        in_network_expression, stem, context, source, threshold, threshold_label
+    )
 
     return {
         "genes_not_in_network_absolute": genes_not_in_network,
@@ -308,7 +304,9 @@ def main(argv=None):
     expression_by_context = convert_id_space(expression_by_context, args.id_space)
     n_genes_in_context = expression_by_context[
         passes_threshold(
-            expression_by_context["expression"], args.threshold, args.filtering_source
+            expression_by_context["expression"],
+            float(args.threshold),
+            args.filtering_source,
         )
     ].shape[0]
     # filter network by context specific expression with the given threshold
@@ -330,7 +328,7 @@ def main(argv=None):
             "genes_filtered_by_threshold_absolute\tgenes_filtered_by_threshold_relative\n"
         )
         f.write(
-            f"{Path(args.network).stem}.{args.context}.{args.filtering_source}.{format_threshold(args.threshold)}\t{context_label}\t{n_genes_in_context}\t"
+            f"{Path(args.network).stem}.{args.context}.{args.filtering_source}.{args.threshold}\t{context_label}\t{n_genes_in_context}\t"
             f"{filtering_statistics['genes_not_in_network_absolute']}\t{filtering_statistics['genes_not_in_network_relative']}\t"
             f"{filtering_statistics['genes_not_in_expression_file_absolute']}\t{filtering_statistics['genes_not_in_expression_file_relative']}\t"
             f"{filtering_statistics['genes_filtered_by_threshold_absolute']}\t{filtering_statistics['genes_filtered_by_threshold_relative']}\n"
