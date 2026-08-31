@@ -28,6 +28,7 @@ include { CONTEXT_SPECIFIC_FILTERING as CRAPOME_FILTERING} from '../modules/loca
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
 include { GT_BIOPAX             } from '../subworkflows/local/gt_biopax/main'
+include { NETWORK_FILTERING     } from '../subworkflows/local/network_filtering/main'
 include { NETWORKEXPANSION      } from '../subworkflows/local/networkexpansion/main'
 include { GT_SEEDPERTURBATION    } from '../subworkflows/local/gt_seedperturbation/main'
 include { GT_NETWORKPERTURBATION } from '../subworkflows/local/gt_networkperturbation/main'
@@ -146,7 +147,6 @@ workflow DISEASEMODULEDISCOVERY {
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         Context Specific filtering
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    */
     ch_context_specific_network = ch_context_specific_input
         .map{_seeds, network, context, source, threshold ->
             [network.baseName, context, source, threshold]
@@ -220,7 +220,14 @@ workflow DISEASEMODULEDISCOVERY {
         ch_network_multiqc = ch_network_multiqc.mix(CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path })
         ch_perturbed_networks = ch_perturbed_networks.mix(ch_context_specific_network.map{meta, _path -> [meta, []]})
     }
-    
+    */
+    NETWORK_FILTERING(ch_network_gt, ch_context_specific_input, ch_seeds, ch_network_multiqc, ch_perturbed_networks)
+    ch_network_gt = NETWORK_FILTERING.out.network_gt
+    ch_seeds = NETWORK_FILTERING.out.seeds
+    ch_perturbed_networks = NETWORK_FILTERING.out.perturbed_networks
+    ch_network_multiqc = NETWORK_FILTERING.out.network_multiqc
+    ch_versions = ch_versions.mix(NETWORK_FILTERING.out.versions)
+    ch_multiqc_files = ch_multiqc_files.mix(NETWORK_FILTERING.out.multiqc_files)
 
 
     ch_network_multiqc = ch_network_multiqc
@@ -656,7 +663,7 @@ workflow DISEASEMODULEDISCOVERY {
 
     // Format complex MultiQC input files
     ch_multiqc_formatter_input = GRAPHTOOLPARSER.out.node_degree
-        .mix(CONTEXT_SPECIFIC_FILTERING.out.node_degree)
+        .mix(NETWORK_FILTERING.out.node_degree)
         .map{_meta, path -> path}
         .collect()
         .map{networks ->
@@ -664,8 +671,7 @@ workflow DISEASEMODULEDISCOVERY {
             [header, networks]
         }
         .mix(
-            CONTEXT_SPECIFIC_FILTERING.out.expression_distribution
-                .mix(CRAPOME_FILTERING.out.expression_distribution)
+            NETWORK_FILTERING.out.expression_distribution
                 .map{ _meta, path -> path }
                 .collect()
                 .map{ files ->

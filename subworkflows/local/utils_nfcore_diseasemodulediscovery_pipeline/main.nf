@@ -173,7 +173,8 @@ workflow PIPELINE_INITIALISATION {
                     error("Sample sheet row for seeds '${seeds}' and network '${network}' specifies a context but no source and/or threshold. 'context', 'source' and 'threshold' must all be specified together in the sample sheet.")
                 }
                 contexts.collect{ context ->
-                    [seeds, network, context, row_source, row_threshold]
+                    def context_key = context + "." + row_source + "." + row_threshold
+                    [seeds, network, context_key, context, row_source, row_threshold]
                 }
             }
 
@@ -198,8 +199,12 @@ workflow PIPELINE_INITIALISATION {
                 .fromPath(params.seeds.split(',').flatten(), checkIfExists: true)
                 .combine(ch_network.map{_meta, network -> network})
                 .combine(params.context.split(",").flatten())
-                .combine(Channel.value(params.filtering_source))
-                .combine(Channel.value(params.filtering_threshold))
+                .map{ seeds, network, context -> 
+                    def source = params.filtering_source
+                    def threshold = params.filtering_threshold
+                    def context_key = context + "." + source + "." + threshold
+                    [seeds, network, context_key, context, source, threshold]
+                }
         } else {
             ch_context_specific_input = Channel.empty()
         }
