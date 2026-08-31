@@ -135,10 +135,12 @@ def resolve_expression_file(filtering_source, custom_expression_file, context):
         df = df[["id", "expression"]]
         return df, None
     elif filtering_source == "CRAPome":
-        response = requests.get(CRAPOME_URL)
+        response = requests.get(CRAPOME_URL, verify=False,stream=True)
         response.raise_for_status()
         expression_file = Path("crap_db_v1_flat_file_human.xlsx")
-        expression_file.write_bytes(response.content)
+        with open(expression_file, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
         raw = pd.read_excel(expression_file, sheet_name="Sheet1")
         # CC* columns hold the per-experiment spectral counts observed in
         # control (contaminant-background) AP-MS runs
@@ -229,7 +231,72 @@ def save_expression_distribution(
         yaml.safe_dump(distribution, f, sort_keys=False, default_flow_style=None)
 
 
-def filter_network(network_file, threshold_label, expression_by_context, context, source):
+def write_crapome_filtering_statistics(
+    network_name,
+    source,
+    threshold_label,
+    network_num_vertices,
+    nodes_marked_as_crapome,
+    genes_filtered_by_threshold,
+):
+    with open("filtering_statistic.tsv", "w") as f:
+        f.write(
+            "network\t"
+            "nodes_marked_as_crapome_absolute\tnodes_marked_as_crapome_relative\t"
+            "genes_filtered_by_threshold_absolute\tgenes_filtered_by_threshold_relative\n"
+        )
+        f.write(
+            f"{network_name}.{source}.{threshold_label}\t"
+            f"{nodes_marked_as_crapome}\t"
+            f"{nodes_marked_as_crapome / network_num_vertices if network_num_vertices else 0.0}\t"
+            f"{genes_filtered_by_threshold}\t"
+            f"{genes_filtered_by_threshold / network_num_vertices if network_num_vertices else 0.0}\n"
+        )
+
+
+def write_filtering_statistics(
+    network_name,
+    context,
+    source,
+    threshold_label,
+    dataset_link,
+    n_genes_in_context,
+    expression_num_entries,
+    network_num_vertices,
+    genes_not_in_network,
+    genes_not_in_expression_file,
+    genes_filtered_by_threshold,
+):
+    context_label = f"<a href={dataset_link}>{context}</a>" if dataset_link else context
+    genes_not_in_network_relative = (
+        genes_not_in_network / expression_num_entries if expression_num_entries else 0.0
+    )
+    genes_not_in_expression_file_relative = (
+        genes_not_in_expression_file / network_num_vertices
+        if network_num_vertices
+        else 0.0
+    )
+    genes_filtered_by_threshold_relative = (
+        genes_filtered_by_threshold / network_num_vertices if network_num_vertices else 0.0
+    )
+    with open("filtering_statistic.tsv", "w") as f:
+        f.write(
+            "network\tcontext\tgenes_in_context\t"
+            "genes_not_in_network_absolute\tgenes_not_in_network_relative\t"
+            "genes_not_in_expression_file_absolute\tgenes_not_in_expression_file_relative\t"
+            "genes_filtered_by_threshold_absolute\tgenes_filtered_by_threshold_relative\n"
+        )
+        f.write(
+            f"{network_name}.{context}.{source}.{threshold_label}\t{context_label}\t{n_genes_in_context}\t"
+            f"{genes_not_in_network}\t{genes_not_in_network_relative}\t"
+            f"{genes_not_in_expression_file}\t{genes_not_in_expression_file_relative}\t"
+            f"{genes_filtered_by_threshold}\t{genes_filtered_by_threshold_relative}\n"
+        )
+
+
+def filter_network(
+    network_file, threshold_label, expression_by_context, context, source, dataset_link
+):
     threshold = float(threshold_label)
     network = gt.load_graph(network_file)
     stem = Path(network_file).stem
@@ -266,31 +333,39 @@ def filter_network(network_file, threshold_label, expression_by_context, context
     network.purge_vertices()
     network.clear_filters()
     del network.vp["context_filter"]
-    network.save(f"{stem}.{context}.{source}.{threshold_label}.gt")
+    
+    n_genes_in_context = expression_by_context[
+        passes_threshold(expression_by_context["expression"], threshold, source)
+    ].shape[0]
+    if str(source).lower() == "crapome":
+        network.save(f"{stem}.{source}.{threshold_label}.gt")
+        write_crapome_filtering_statistics(
+            stem,
+            source,
+            threshold_label,
+            network_num_vertices,
+            in_network_expression.shape[0],
+            genes_filtered_by_threshold,
+        )
+        return
+    
     save_expression_distribution(
         in_network_expression, stem, context, source, threshold, threshold_label
     )
-
-    return {
-        "genes_not_in_network_absolute": genes_not_in_network,
-        "genes_not_in_network_relative": (
-            genes_not_in_network / expression_num_entries
-            if expression_num_entries
-            else 0.0
-        ),
-        "genes_not_in_expression_file_absolute": genes_not_in_expression_file,
-        "genes_not_in_expression_file_relative": (
-            genes_not_in_expression_file / network_num_vertices
-            if network_num_vertices
-            else 0.0
-        ),
-        "genes_filtered_by_threshold_absolute": genes_filtered_by_threshold,
-        "genes_filtered_by_threshold_relative": (
-            genes_filtered_by_threshold / network_num_vertices
-            if network_num_vertices
-            else 0.0
-        ),
-    }
+    network.save(f"{stem}.{context}.{source}.{threshold_label}.gt")
+    write_filtering_statistics(
+        stem,
+        context,
+        source,
+        threshold_label,
+        dataset_link,
+        n_genes_in_context,
+        expression_num_entries,
+        network_num_vertices,
+        genes_not_in_network,
+        genes_not_in_expression_file,
+        genes_filtered_by_threshold,
+    )
 
 
 def main(argv=None):
@@ -302,37 +377,15 @@ def main(argv=None):
     )
     # map gene_ids to the specified id space
     expression_by_context = convert_id_space(expression_by_context, args.id_space)
-    n_genes_in_context = expression_by_context[
-        passes_threshold(
-            expression_by_context["expression"],
-            float(args.threshold),
-            args.filtering_source,
-        )
-    ].shape[0]
     # filter network by context specific expression with the given threshold
-    filtering_statistics = filter_network(
+    filter_network(
         args.network,
         args.threshold,
         expression_by_context,
         args.context,
         args.filtering_source,
+        dataset_link,
     )
-    context_label = (
-        f"<a href={dataset_link}>{args.context}</a>" if dataset_link else args.context
-    )
-    with open("filtering_statistic.tsv", "w") as f:
-        f.write(
-            "network\tcontext\tgenes_in_context\t"
-            "genes_not_in_network_absolute\tgenes_not_in_network_relative\t"
-            "genes_not_in_expression_file_absolute\tgenes_not_in_expression_file_relative\t"
-            "genes_filtered_by_threshold_absolute\tgenes_filtered_by_threshold_relative\n"
-        )
-        f.write(
-            f"{Path(args.network).stem}.{args.context}.{args.filtering_source}.{args.threshold}\t{context_label}\t{n_genes_in_context}\t"
-            f"{filtering_statistics['genes_not_in_network_absolute']}\t{filtering_statistics['genes_not_in_network_relative']}\t"
-            f"{filtering_statistics['genes_not_in_expression_file_absolute']}\t{filtering_statistics['genes_not_in_expression_file_relative']}\t"
-            f"{filtering_statistics['genes_filtered_by_threshold_absolute']}\t{filtering_statistics['genes_filtered_by_threshold_relative']}\n"
-        )
 
 
 if __name__ == "__main__":

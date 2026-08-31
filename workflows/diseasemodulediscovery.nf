@@ -23,6 +23,7 @@ include { DRUGPREDICTIONS                   } from '../modules/local/drugpredict
 include { TOPOLOGY                          } from '../modules/local/topology/main'
 include { DRUGSTONEEXPORT                   } from '../modules/local/drugstoneexport/main'
 include { CONTEXT_SPECIFIC_FILTERING         } from '../modules/local/context_specific_filtering/main'
+include { CONTEXT_SPECIFIC_FILTERING as CRAPOME_FILTERING} from '../modules/local/context_specific_filtering/main'
 //
 // SUBWORKFLOW: Consisting of a mix of local and nf-core/modules
 //
@@ -140,53 +141,86 @@ workflow DISEASEMODULEDISCOVERY {
     ch_network_multiqc = GRAPHTOOLPARSER.out.multiqc
         .map{ meta, path -> path }
     ch_network_gt = GRAPHTOOLPARSER.out.network
-    //Context specific filtering
-    if(ch_context_specific_input.ifEmpty(false)){
-        ch_context_specific_input.view()
-        ch_context_specific_network = ch_context_specific_input
-            .map{_seeds, network, context, source, threshold ->
-                [network.baseName, context, source, threshold]
-            }
-            .combine(
-                ch_network_gt.map{meta, network -> [meta.network_id, meta, network]},
-                by: 0
-            )
-            .map{ _network_id, context, source, threshold, meta, network ->
+    
+    /*
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        Context Specific filtering
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    */
+    ch_context_specific_network = ch_context_specific_input
+        .map{_seeds, network, context, source, threshold ->
+            [network.baseName, context, source, threshold]
+        }
+        .combine(
+            ch_network_gt.map{meta, network -> [meta.network_id, meta, network]},
+            by: 0
+        )
+        .map{ _network_id, context, source, threshold, meta, network ->
+            def dup = meta.clone()
+            dup.id = meta.id + "." + context + "." + source + "." + threshold
+            dup.network_id = meta.network_id + "." + context + "." + source + "." + threshold
+            [dup, network, context, source, threshold]
+        }
+    ch_context_specific_seeds = ch_context_specific_input
+        .map{seeds, network, context, source, threshold ->
+            def context_specific_id = seeds.baseName + network.baseName + "." + context + "." + source + "." + threshold
+            [[id: context_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + context + "." + source + "." + threshold], seeds]
+        }
+    CONTEXT_SPECIFIC_FILTERING(ch_context_specific_network)
+    ch_versions = ch_versions.mix(CONTEXT_SPECIFIC_FILTERING.out.versions)
+    ch_context_specific_network = CONTEXT_SPECIFIC_FILTERING.out.filtered_network
+    ch_filtering_statistic = CONTEXT_SPECIFIC_FILTERING.out.filtering_statistic
+        .map{ _meta, path -> path }
+        .collectFile(
+            cache: false,
+            storeDir: "${params.outdir}/mqc_summaries",
+            name: 'filtering_statistics_mqc.tsv',
+            keepHeader: true
+        )
+    ch_multiqc_files = ch_multiqc_files.mix(ch_filtering_statistic)
+
+    if(params.filter_crapomes){
+        //filter for crapomes 
+        CRAPOME_FILTERING(
+            ch_network_gt.mix(ch_context_specific_network)
+            .map{meta, network -> 
                 def dup = meta.clone()
-                dup.id = meta.id + "." + context + "." + source + "." + threshold
-                dup.network_id = meta.network_id + "." + context + "." + source + "." + threshold
-                [dup, network, context, source, threshold]
+                dup.id = meta.id + ".crapome" + "." + params.crapome_filtering_threshold
+                dup.network_id = meta.network_id + ".crapome"+"."+ params.crapome_filtering_threshold
+                [dup, network, "CRAPome", "CRAPome", params.crapome_filtering_threshold]
             }
-        ch_context_specific_network.view()
-        ch_context_specific_seeds = ch_context_specific_input
-            .map{seeds, network, context, source, threshold ->
-                def context_specific_id = seeds.baseName + network.baseName + "." + context + "." + source + "." + threshold
-                [[id: context_specific_id, seeds_id: seeds.baseName, network_id: network.baseName + "." + context + "." + source + "." + threshold], seeds]
+        )
+        ch_context_specific_network = ch_context_specific_network.mix(CRAPOME_FILTERING.out.filtered_network)
+        ch_crapome_specific_seeds = ch_seeds.mix(ch_context_specific_seeds)
+            .map{meta, seeds ->
+                def dup = meta.clone()
+                dup.id = meta.id + ".crapome" + "." + params.crapome_filtering_threshold
+                dup.network_id = meta.network_id + ".crapome" + "." + params.crapome_filtering_threshold
+                [dup, seeds]
             }
-        CONTEXT_SPECIFIC_FILTERING(ch_context_specific_network)
-        ch_versions = ch_versions.mix(CONTEXT_SPECIFIC_FILTERING.out.versions)
-        ch_context_specific_network = CONTEXT_SPECIFIC_FILTERING.out.filtered_network
-        ch_filtering_statistic = CONTEXT_SPECIFIC_FILTERING.out.filtering_statistic
-            .map({ _meta, path -> path })
+        ch_context_specific_seeds = ch_context_specific_seeds.mix(ch_crapome_specific_seeds)
+        ch_crapome_statistics = CRAPOME_FILTERING.out.filtering_statistic
+            .map{_meta, path -> path}
             .collectFile(
                 cache: false,
-                storeDir: "${params.outdir}/mqc_summaries",
-                name: 'filtering_statistics_mqc.tsv',
+                storeDir:"${params.outdir}/mqc_summaries",
+                name:'crapome_filtering_statistics_mqc.tsv',
                 keepHeader: true
             )
-        ch_multiqc_files = ch_multiqc_files.mix(ch_filtering_statistic)
-        if(params.run_filtered_networks_only){
-            ch_network_gt = ch_context_specific_network
-            ch_seeds = ch_context_specific_seeds
-            ch_network_multiqc = CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path }
-            ch_perturbed_networks = ch_context_specific_network.map{meta, _path -> [meta, []]}
-        }else{
-            ch_network_gt = ch_network_gt.mix(ch_context_specific_network)
-            ch_seeds = ch_seeds.mix(ch_context_specific_seeds)
-            ch_network_multiqc = ch_network_multiqc.mix(CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path })
-            ch_perturbed_networks = ch_perturbed_networks.mix(ch_context_specific_network.map{meta, _path -> [meta, []]})
-        }
+        ch_multiqc_files = ch_multiqc_files.mix(ch_crapome_statistics)
     }
+    if(params.run_filtered_networks_only){
+        ch_network_gt = ch_context_specific_network
+        ch_seeds = ch_context_specific_seeds
+        ch_network_multiqc = CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path }
+        ch_perturbed_networks = ch_context_specific_network.map{meta, _path -> [meta, []]}
+    }else{
+        ch_network_gt = ch_network_gt.mix(ch_context_specific_network)
+        ch_seeds = ch_seeds.mix(ch_context_specific_seeds)
+        ch_network_multiqc = ch_network_multiqc.mix(CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path })
+        ch_perturbed_networks = ch_perturbed_networks.mix(ch_context_specific_network.map{meta, _path -> [meta, []]})
+    }
+    
 
 
     ch_network_multiqc = ch_network_multiqc
@@ -631,6 +665,7 @@ workflow DISEASEMODULEDISCOVERY {
         }
         .mix(
             CONTEXT_SPECIFIC_FILTERING.out.expression_distribution
+                .mix(CRAPOME_FILTERING.out.expression_distribution)
                 .map{ _meta, path -> path }
                 .collect()
                 .map{ files ->
