@@ -64,7 +64,7 @@ workflow NETWORK_FILTERING {
             ch_network_gt.mix(ch_filtered_networks)
             .map{meta, network ->
                 def dup = meta.clone()
-                def filtering_file = downloadFilteringFile("","CRAPOME")
+                def filtering_file = downloadFilteringFile("","CRAPome")
                 dup.id = meta.id + ".crapome" + "." + params.crapome_filtering_threshold
                 dup.network_id = meta.network_id + ".crapome"+"."+ params.crapome_filtering_threshold
                 [dup, network, "CRAPome", "CRAPome", filtering_file, params.crapome_filtering_threshold]
@@ -124,16 +124,23 @@ workflow NETWORK_FILTERING {
 */
 
 def downloadFilteringFile(context, source){
-    if (source == "GTEX"){
+    if (source == "GTEx"){
         return file("https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz")
     }
     else if (source == "PAXDB"){
-        return file("https://pax-db.org/downloads/6.1/datasets/9606/9606-${context}-integrated.txt")
+        return file("https://pax-db.org/downloads/6.1/datasets/9606/9606-${context.toUpperCase()}-integrated.txt")
     }
     else if (source == "TCGA"){
-        return file("https://gdc-hub.s3.us-east-1.amazonaws.com/download/TCGA-${context}.star_tpm.tsv.gz")
+        if (!context.toUpperCase().startsWith("TCGA_")) {
+            error("context must be of the form 'TCGA_<cancer_type>' when using filtering_source TCGA, got '${context}'")
+        }
+        def cancer_type = context.toUpperCase().replaceFirst(/^TCGA_/, "")
+        return file("https://gdc-hub.s3.us-east-1.amazonaws.com/download/TCGA-${cancer_type}.star_tpm.tsv.gz")
     }
-    else if (source == "CRAPOME"){
+    else if (source == "CRAPome"){
         return file("https://reprint-apms.org/?q=system/files/crap_db_v1_flat_file_human.xlsx")
+    }
+    else {
+        error("Unknown filtering_source: '${source}'. Must be one of: GTEx, PAXDB, TCGA, CRAPome")
     }
 }

@@ -3,21 +3,12 @@
 import argparse
 from pathlib import Path
 import sys
-import requests
 import pandas as pd
 import yaml
 import graph_tool.all as gt
 import util as utils
 from gprofiler import GProfiler
 
-GTEX_URL = "https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz"
-PAXDB_URL = (
-    "https://pax-db.org/downloads/6.1/datasets/9606/9606-{context}-integrated.txt"
-)
-TCGA_URL = "https://gdc-hub.s3.us-east-1.amazonaws.com/download/TCGA-{cancer_type}.star_tpm.tsv.gz"
-CRAPOME_URL = (
-    "https://reprint-apms.org/?q=system/files/crap_db_v1_flat_file_human.xlsx"
-)
 # sources whose score is a contaminant/false-positive likelihood rather than an
 # expression level: proteins are kept below the threshold instead of above it
 INVERTED_THRESHOLD_SOURCES = {"CRAPome"}
@@ -25,7 +16,7 @@ INVERTED_THRESHOLD_SOURCES = {"CRAPome"}
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
-        description="filter network by context specific expression"
+     
     )
     parser.add_argument(
         "--network",
@@ -53,6 +44,12 @@ def parse_args(argv=None):
         help="path to a custom expression file with columns 'id' and 'expression'",
     )
     parser.add_argument(
+        "--filtering_file",
+        type=str,
+        default=None,
+        help="path to the filtering source file for --filtering_source, pre-downloaded by Nextflow",
+    )
+    parser.add_argument(
         "--id_space",
         type=str,
         default="ensembl",
@@ -61,10 +58,14 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def resolve_expression_file(filtering_source, custom_expression_file, context):
+def resolve_expression_file(
+    filtering_source, custom_expression_file, filtering_file, context
+):
     """Returns a tuple of (expression_df, dataset_link). dataset_link is a URL
     pointing at the specific dataset used for filtering, or None if the
-    source has no such page (custom files)."""
+    source has no such page (custom files). filtering_file is the filtering
+    source file for filtering_source, already downloaded and staged by
+    Nextflow."""
     if filtering_source != "null" and custom_expression_file != "null":
         raise ValueError(
             "Specify either --filtering_source or --custom_expression_file, not both"
@@ -80,30 +81,19 @@ def resolve_expression_file(filtering_source, custom_expression_file, context):
         return df, None
 
     if filtering_source == "GTEx":
-        response = requests.get(GTEX_URL, stream=True)
-        response.raise_for_status()
-        # write to the task work directory (rather than a python tempfile) so
-        # the raw source data is kept alongside the rest of the process outputs
-        expression_file = Path("GTEx_expression.gct.gz")
-        with open(expression_file, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        df = pd.read_csv(expression_file, sep="\t", skiprows=2, header=0)
+        df = pd.read_csv(filtering_file, sep="\t", skiprows=2, header=0)
         df.rename(columns={df.columns[0]: "id"}, inplace=True)
         df = df[["id", context]].rename(columns={context: "expression"})
         df["id"] = df["id"].apply(lambda x: x.split(".")[0])
         return df, f"https://gtexportal.org/home/tissue/{context}"
     elif filtering_source == "PAXDB":
-        response = requests.get(PAXDB_URL.format(context=context.upper()))
-        response.raise_for_status()
-        expression_file = Path(f"9606-{context}-integrated.txt")
-        expression_file.write_text(response.text)
         # the first line of the file holds the PaxDB dataset id, e.g. "#id: 4032974247"
-        dataset_id = response.text.splitlines()[0].split(":", 1)[1].strip()
+        first_line = Path(filtering_file).read_text().splitlines()[0]
+        dataset_id = first_line.split(":", 1)[1].strip()
         # the column header itself is also '#'-prefixed in PaxDB files, so it
         # gets dropped as a comment too; supply the column names explicitly
         df = pd.read_csv(
-            expression_file,
+            filtering_file,
             sep="\t",
             comment="#",
             header=None,
@@ -117,14 +107,7 @@ def resolve_expression_file(filtering_source, custom_expression_file, context):
             raise ValueError(
                 f"--context must be of the form 'TCGA_{{cancer_type}}' when using --filtering_source TCGA, got '{context}'"
             )
-        cancer_type = context.upper().removeprefix("TCGA_")
-        response = requests.get(TCGA_URL.format(cancer_type=cancer_type), stream=True)
-        response.raise_for_status()
-        expression_file = Path(f"TCGA-{cancer_type}.star_tpm.tsv.gz")
-        with open(expression_file, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        df = pd.read_csv(expression_file, sep="\t", header=0)
+        df = pd.read_csv(filtering_file, sep="\t", header=0)
         df.rename(columns={df.columns[0]: "id"}, inplace=True)
         df["id"] = df["id"].apply(lambda x: x.split(".")[0])
         sample_columns = df.columns.drop("id")
@@ -135,13 +118,9 @@ def resolve_expression_file(filtering_source, custom_expression_file, context):
         df = df[["id", "expression"]]
         return df, None
     elif filtering_source == "CRAPome":
-        response = requests.get(CRAPOME_URL, verify=False,stream=True)
-        response.raise_for_status()
-        expression_file = Path("crap_db_v1_flat_file_human.xlsx")
-        with open(expression_file, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        raw = pd.read_excel(expression_file, sheet_name="Sheet1")
+        # pass engine explicitly since the file staged by Nextflow may not
+        # keep the .xlsx extension (the source URL has a query string)
+        raw = pd.read_excel(filtering_file, sheet_name="Sheet1", engine="openpyxl")
         # CC* columns hold the per-experiment spectral counts observed in
         # control (contaminant-background) AP-MS runs
         cc_columns = [col for col in raw.columns if col.startswith("CC")]
@@ -373,7 +352,10 @@ def main(argv=None):
     global id_space
     id_space = args.id_space
     expression_by_context, dataset_link = resolve_expression_file(
-        args.filtering_source, args.custom_expression_file, args.context
+        args.filtering_source,
+        args.custom_expression_file,
+        args.filtering_file,
+        args.context,
     )
     # map gene_ids to the specified id space
     expression_by_context = convert_id_space(expression_by_context, args.id_space)

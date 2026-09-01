@@ -3,7 +3,7 @@ process CONTEXT_SPECIFIC_FILTERING {
     label 'process_single'
     container 'docker.io/motan04/modulediscovery_python_dependencies:latest'
     input:
-    tuple val(meta), path(network), val(context), val(source), val(threshold)
+    tuple val(meta), path(network), val(context), val(source), path(filtering_file), val(threshold)
     output:
     tuple val(meta), path("${meta.id}.gt")                              , emit: filtered_network
     tuple val(meta), path("input_network_multiqc.tsv")                  , emit: multiqc
@@ -21,6 +21,7 @@ process CONTEXT_SPECIFIC_FILTERING {
     context_specific_filtering.py --network ${network} \
     --context ${context} \
     --filtering_source ${source} \
+    --filtering_file ${filtering_file} \
     --custom_expression_file ${params.custom_filtering_file} \
     --id_space ${params.id_space} \
     --threshold ${threshold}
