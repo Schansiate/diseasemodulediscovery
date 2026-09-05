@@ -127,7 +127,7 @@ def downloadFilteringFile(context, source){
         return file("https://storage.googleapis.com/adult-gtex/bulk-gex/v11/rna-seq/GTEx_Analysis_2025-08-22_v11_RNASeQCv2.4.3_gene_median_tpm.gct.gz")
     }
     else if (source == "PAXDB"){
-        return file("https://pax-db.org/downloads/6.1/datasets/9606/9606-${context.toUpperCase()}-integrated.txt")
+        return file("/nfs/home/students/m.tan/BA/data/paxdb_raw/9606-${context.toUpperCase()}-integrated.txt")
     }
     else if (source == "TCGA"){
         if (!context.toUpperCase().startsWith("TCGA_")) {
