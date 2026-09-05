@@ -39,7 +39,7 @@ workflow NETWORK_FILTERING {
             [dup, network, context, source, filtering_file, threshold]
         }
     ch_context_specific_seeds = ch_context_specific_input
-        .map{seeds, network, context_key, context, source, threshold ->
+        .map{seeds, network, context_key, _context, _source, _threshold ->
             def context_specific_id = seeds.baseName + network.baseName + "." + context_key
             def network_id = network.baseName + "." + context_key
             [[id: context_specific_id, seeds_id: seeds.baseName, network_id: network_id ], seeds]
@@ -95,15 +95,14 @@ workflow NETWORK_FILTERING {
     if(params.run_filtered_networks_only){
         ch_network_gt = ch_filtered_networks
         ch_seeds = ch_context_specific_seeds
-        ch_network_multiqc = ch_filtered_network_multiqc
+        ch_network_multiqc = ch_filtered_network_multiqc.map{_meta, path -> path }
         ch_perturbed_networks = ch_filtered_networks.map{ meta, _path -> [meta, []] }
     } else {
         ch_network_gt = ch_network_gt.mix(ch_filtered_networks)
         ch_seeds = ch_seeds.mix(ch_context_specific_seeds)
-        ch_network_multiqc = ch_network_multiqc.mix(ch_filtered_network_multiqc)
+        ch_network_multiqc = ch_network_multiqc.mix(ch_filtered_network_multiqc.map{_meta, path -> path })
         ch_perturbed_networks = ch_perturbed_networks.mix(ch_filtered_networks.map{ meta, _path -> [meta, []] })
-    }
-
+    }    
     emit:
     versions              = ch_versions                            // channel: [ path(versions.yml) ]
     network_gt             = ch_network_gt                          // channel: [ val(meta[id,network_id]), path(network) ]
