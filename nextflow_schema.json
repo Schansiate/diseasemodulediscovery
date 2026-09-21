@@ -477,10 +477,10 @@
     ],
     "properties": {
         "crapome_filtering_threshold": {
-            "type": "integer",
+            "type": "number",
             "description": "threshold for filtering for crapomes",
-            "default": 1000,
-            "help_text": "Threshold for filtering for crapomes, proteins in the crapomes database with a total spectral count across all control experiments above the threshold are removed from the input networks"
+            "default": 0.5,
+            "help_text": "Threshold for filtering for crapomes, given as a fraction (0-1) of all control experiments in the CRAPome database. Proteins detected in a larger fraction of control experiments than the threshold are considered contaminants and removed from the input networks."
         },
         "filter_crapomes": {
             "type": "boolean",

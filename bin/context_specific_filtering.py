@@ -29,7 +29,9 @@ def parse_args(argv=None):
         "--threshold",
         type=str,
         default="0.1",
-        help="expression threshold to filter by",
+        help="expression threshold to filter by. For --filtering_source CRAPome, "
+        "this is the fraction (0-1) of control experiments a protein may be "
+        "detected in before it is considered a contaminant",
     )
     parser.add_argument(
         "--filtering_source",
@@ -122,9 +124,15 @@ def resolve_expression_file(
         # keep the .xlsx extension (the source URL has a query string)
         raw = pd.read_excel(filtering_file, sheet_name="Sheet1", engine="openpyxl")
         # CC* columns hold the per-experiment spectral counts observed in
-        # control (contaminant-background) AP-MS runs
+        # control (contaminant-background) AP-MS runs; a protein is
+        # considered "detected" in an experiment if its spectral count there
+        # is greater than zero. The filtering criterion is the fraction of
+        # control experiments it was detected in (0-1), not the total
+        # spectral count, so the threshold reads as a percentage of experiments
         cc_columns = [col for col in raw.columns if col.startswith("CC")]
-        raw["expression"] = raw[cc_columns].sum(axis=1)
+        raw["expression"] = (raw[cc_columns].fillna(0) > 0).sum(axis=1) / len(
+            cc_columns
+        )
         df = raw[["geneSymbol", "expression"]].groupby(
             "geneSymbol", as_index=False
         ).agg({"expression": "sum"})

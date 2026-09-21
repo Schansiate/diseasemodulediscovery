@@ -90,8 +90,9 @@ params {
     //
     // Context specific filtering
     //
-    //threshold for filtering crapomes
-    crapome_filtering_threshold: Integer = 1000
+    //threshold for filtering crapomes: fraction (0-1) of control experiments
+    //a protein may be detected in before it is considered a contaminant
+    crapome_filtering_threshold: Float = 0.5
 
     //flag for filtering crapomes
     filter_crapomes: Boolean
