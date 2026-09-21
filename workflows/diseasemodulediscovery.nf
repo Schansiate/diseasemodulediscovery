@@ -228,7 +228,7 @@ workflow DISEASEMODULEDISCOVERY {
     ch_network_multiqc = NETWORK_FILTERING.out.network_multiqc
     ch_versions = ch_versions.mix(NETWORK_FILTERING.out.versions)
     ch_multiqc_files = ch_multiqc_files.mix(NETWORK_FILTERING.out.multiqc_files)
-
+  
 
     ch_network_multiqc = ch_network_multiqc
         .collectFile(

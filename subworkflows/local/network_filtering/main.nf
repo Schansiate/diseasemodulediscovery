@@ -39,7 +39,7 @@ workflow NETWORK_FILTERING {
             [dup, network, context, source, filtering_file, threshold]
         }
     ch_context_specific_seeds = ch_context_specific_input
-        .map{seeds, network, context_key, _context, _source, _threshold ->
+        .map{seeds, network, context_key, context, source, threshold ->
             def context_specific_id = seeds.baseName + network.baseName + "." + context_key
             def network_id = network.baseName + "." + context_key
             [[id: context_specific_id, seeds_id: seeds.baseName, network_id: network_id ], seeds]
@@ -48,7 +48,7 @@ workflow NETWORK_FILTERING {
     CONTEXT_SPECIFIC_FILTERING(ch_context_specific_network)
     ch_versions = ch_versions.mix(CONTEXT_SPECIFIC_FILTERING.out.versions)
     ch_filtered_networks = CONTEXT_SPECIFIC_FILTERING.out.filtered_network
-    ch_filtered_network_multiqc = CONTEXT_SPECIFIC_FILTERING.out.multiqc
+    ch_filtered_network_multiqc = CONTEXT_SPECIFIC_FILTERING.out.multiqc.map{ _meta, path -> path}
     ch_multiqc_files = CONTEXT_SPECIFIC_FILTERING.out.filtering_statistic
         .map{ _meta, path -> path }
         .collectFile(
@@ -71,7 +71,9 @@ workflow NETWORK_FILTERING {
             }
         )
         ch_filtered_networks = ch_filtered_networks.mix(CRAPOME_FILTERING.out.filtered_network)
-        ch_filtered_network_multiqc = ch_filtered_network_multiqc.mix(CRAPOME_FILTERING.out.multiqc)
+        ch_filtered_network_multiqc = ch_filtered_network_multiqc.mix
+	    (CRAPOME_FILTERING.out.multiqc
+		.map{_meta, path -> path })
         ch_multiqc_files = ch_multiqc_files
         .mix(CRAPOME_FILTERING.out.filtering_statistic
             .map{ _meta, path -> path }
@@ -95,12 +97,12 @@ workflow NETWORK_FILTERING {
     if(params.run_filtered_networks_only){
         ch_network_gt = ch_filtered_networks
         ch_seeds = ch_context_specific_seeds
-        ch_network_multiqc = ch_filtered_network_multiqc.map{_meta, path -> path }
+        ch_network_multiqc = ch_filtered_network_multiqc
         ch_perturbed_networks = ch_filtered_networks.map{ meta, _path -> [meta, []] }
     } else {
         ch_network_gt = ch_network_gt.mix(ch_filtered_networks)
         ch_seeds = ch_seeds.mix(ch_context_specific_seeds)
-        ch_network_multiqc = ch_network_multiqc.mix(ch_filtered_network_multiqc.map{_meta, path -> path })
+        ch_network_multiqc = ch_network_multiqc.mix(ch_filtered_network_multiqc)
         ch_perturbed_networks = ch_perturbed_networks.mix(ch_filtered_networks.map{ meta, _path -> [meta, []] })
     }    
     emit:
@@ -134,7 +136,7 @@ def downloadFilteringFile(context, source){
             error("context must be of the form 'TCGA_<cancer_type>' when using filtering_source TCGA, got '${context}'")
         }
         def cancer_type = context.toUpperCase().replaceFirst(/^TCGA_/, "")
-        return file("https://gdc-hub.s3.us-east-1.amazonaws.com/download/TCGA-${cancer_type}.star_tpm.tsv.gz")
+        return file("/nfs/home/students/m.tan/BA/data/tcga_raw/TCGA-${cancer_type}.star_tpm.tsv.gz")
     }
     else if (source == "CRAPome"){
         return file("https://reprint-apms.org/?q=system/files/crap_db_v1_flat_file_human.xlsx")
