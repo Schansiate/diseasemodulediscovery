@@ -22,7 +22,6 @@ workflow NETWORK_FILTERING {
     ch_multiqc_files = channel.empty()
     ch_node_degrees = channel.empty()
     ch_filtered_network_multiqc = channel.empty()
-
     ch_context_specific_network = ch_context_specific_input
         .map{_seeds, network, context_key, context, source, threshold ->
             [network.baseName, context_key, context, source, threshold]
@@ -65,29 +64,27 @@ workflow NETWORK_FILTERING {
             .map{meta, network ->
                 def dup = meta.clone()
                 def filtering_file = downloadFilteringFile("","CRAPome")
-                dup.id = meta.id + ".crapome" + "." + params.crapome_filtering_threshold
-                dup.network_id = meta.network_id + ".crapome"+"."+ params.crapome_filtering_threshold
+                dup.id = meta.id + ".CRAPome" + "." + params.crapome_filtering_threshold
+                dup.network_id = meta.network_id + ".CRAPome"+"."+ params.crapome_filtering_threshold
                 [dup, network, "CRAPome", "CRAPome", filtering_file, params.crapome_filtering_threshold]
             }
         )
         ch_filtered_networks = ch_filtered_networks.mix(CRAPOME_FILTERING.out.filtered_network)
-        ch_filtered_network_multiqc = ch_filtered_network_multiqc.mix
-	    (CRAPOME_FILTERING.out.multiqc
-		.map{_meta, path -> path })
+        ch_filtered_network_multiqc = ch_filtered_network_multiqc.mix(CRAPOME_FILTERING.out.multiqc.map{_meta, path -> path })
         ch_multiqc_files = ch_multiqc_files
-        .mix(CRAPOME_FILTERING.out.filtering_statistic
-            .map{ _meta, path -> path }
-            .collectFile(
-                cache: false,
-                storeDir: "${params.outdir}/mqc_summaries",
-                name: 'crapome_filtering_statistics_mqc.tsv',
-                keepHeader: true
-            ))
+            .mix(CRAPOME_FILTERING.out.filtering_statistic
+                .map{ _meta, path -> path }
+                .collectFile(
+                    cache: false,
+                    storeDir: "${params.outdir}/mqc_summaries",
+                    name: 'crapome_filtering_statistics_mqc.tsv',
+                    keepHeader: true
+                ))
          ch_crapome_specific_seeds = ch_seeds.mix(ch_context_specific_seeds)
             .map{meta, seeds ->
                 def dup = meta.clone()
-                dup.id = meta.id + ".crapome" + "." + params.crapome_filtering_threshold
-                dup.network_id = meta.network_id + ".crapome" + "." + params.crapome_filtering_threshold
+                dup.id = meta.id + ".CRAPome" + "." + params.crapome_filtering_threshold
+                dup.network_id = meta.network_id + ".CRAPome" + "." + params.crapome_filtering_threshold
                 [dup, seeds]
             }
         ch_context_specific_seeds = ch_context_specific_seeds.mix(ch_crapome_specific_seeds)
@@ -139,7 +136,7 @@ def downloadFilteringFile(context, source){
         return file("/nfs/home/students/m.tan/BA/data/tcga_raw/TCGA-${cancer_type}.star_tpm.tsv.gz")
     }
     else if (source == "CRAPome"){
-        return file("https://reprint-apms.org/?q=system/files/crap_db_v1_flat_file_human.xlsx")
+        return file("/nfs/home/students/m.tan/BA/data/crapome.xlsx")
     }
     else {
         error("Unknown filtering_source: '${source}'. Must be one of: GTEx, PAXDB, TCGA, CRAPome")

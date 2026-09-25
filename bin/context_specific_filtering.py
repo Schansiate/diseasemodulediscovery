@@ -9,10 +9,6 @@ import graph_tool.all as gt
 import util as utils
 from gprofiler import GProfiler
 
-# sources whose score is a contaminant/false-positive likelihood rather than an
-# expression level: proteins are kept below the threshold instead of above it
-INVERTED_THRESHOLD_SOURCES = {"CRAPome"}
-
 
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
@@ -148,17 +144,6 @@ def resolve_expression_file(
         raise ValueError(
             f"Unknown filtering_source: '{filtering_source}'. Must be one of: GTEx, ProteomicsDB, PAXDB, TCGA, CRAPome"
         )
-
-
-def passes_threshold(expression, threshold, source):
-    """Selects the entries that should be kept in the network. For expression
-    sources, higher values mean more evidence the protein is active, so
-    entries above the threshold are kept. For contaminant sources like
-    CRAPome, higher values mean more evidence the protein is a false-positive
-    background binder, so entries below the threshold are kept instead."""
-    if source in INVERTED_THRESHOLD_SOURCES:
-        return expression < threshold
-    return expression > threshold
 
 
 ID_SPACE_TARGET_NAMESPACES = {
@@ -297,33 +282,60 @@ def filter_network(
     genes_not_in_expression_file = (
         network_num_vertices - in_network_expression["id"].nunique()
     )
-    context_specific_in_network = in_network_expression[
-        passes_threshold(in_network_expression["expression"], threshold, source)
-    ].copy()
+    # CRAPome scores are contaminant/false-positive likelihoods rather than
+    # expression levels, so proteins are kept below the threshold instead of
+    # above it.
+    is_crapome = source == "CRAPome"
+    if is_crapome:
+        keep_mask = in_network_expression["expression"] < threshold
+    else:
+        keep_mask = in_network_expression["expression"] > threshold
+    context_specific_in_network = in_network_expression[keep_mask].copy()
     genes_filtered_by_threshold = (
         in_network_expression.shape[0] - context_specific_in_network.shape[0]
     )
     context_specific_in_network["vertex_id"] = context_specific_in_network["id"].map(
         name_index
     )
+    in_network_expression["vertex_id"] = in_network_expression["id"].map(name_index)
 
     # filter network by context specific expression
     network.vp["context_filter"] = network.new_vertex_property("bool")
     network.vp["expression_in_context"] = network.new_vertex_property("double")
-    for vertex_id in context_specific_in_network["vertex_id"].unique():
-        network.vp["context_filter"][vertex_id] = True
-        expression_value = context_specific_in_network.loc[
-            context_specific_in_network["vertex_id"] == vertex_id
-        ]["expression"].values[0]
-        network.vp["expression_in_context"][vertex_id] = expression_value
+    if is_crapome:
+        # Contaminant sources (CRAPome) only list a small number of proteins.
+        # Absence from the source means "not a known contaminant", so those
+        # nodes must be kept. Only the in-network nodes that fail the threshold
+        # (the actual contaminants) should be removed; everything else stays.
+        network.vp["context_filter"].a = True
+        contaminant_vertex_ids = (
+            set(in_network_expression["vertex_id"].unique())
+            - set(context_specific_in_network["vertex_id"].unique())
+        )
+        for vertex_id in contaminant_vertex_ids:
+            network.vp["context_filter"][vertex_id] = False
+        # record the contaminant fraction on the nodes that carry a value
+        for vertex_id in in_network_expression["vertex_id"].unique():
+            expression_value = in_network_expression.loc[
+                in_network_expression["vertex_id"] == vertex_id
+            ]["expression"].values[0]
+            network.vp["expression_in_context"][vertex_id] = expression_value
+    else:
+        for vertex_id in context_specific_in_network["vertex_id"].unique():
+            network.vp["context_filter"][vertex_id] = True
+            expression_value = context_specific_in_network.loc[
+                context_specific_in_network["vertex_id"] == vertex_id
+            ]["expression"].values[0]
+            network.vp["expression_in_context"][vertex_id] = expression_value
     network.set_vertex_filter(network.vp["context_filter"])
     network.purge_vertices()
     network.clear_filters()
     del network.vp["context_filter"]
     
-    n_genes_in_context = expression_by_context[
-        passes_threshold(expression_by_context["expression"], threshold, source)
-    ].shape[0]
+    if is_crapome:
+        n_genes_in_context = (expression_by_context["expression"] < threshold).sum()
+    else:
+        n_genes_in_context = (expression_by_context["expression"] > threshold).sum()
     if str(source).lower() == "crapome":
         network.save(f"{stem}.{source}.{threshold_label}.gt")
         write_crapome_filtering_statistics(
