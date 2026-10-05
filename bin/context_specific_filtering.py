@@ -10,6 +10,7 @@ import util as utils
 from gprofiler import GProfiler
 
 
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
      
@@ -56,14 +57,11 @@ def parse_args(argv=None):
     return parser.parse_args(argv)
 
 
+#returns a dataframe for filtering containing the id and expression of the tissue
+#and additionally a link to the downloaded dataset if there is one for the filtering statistc
 def resolve_expression_file(
     filtering_source, custom_expression_file, filtering_file, context
 ):
-    """Returns a tuple of (expression_df, dataset_link). dataset_link is a URL
-    pointing at the specific dataset used for filtering, or None if the
-    source has no such page (custom files). filtering_file is the filtering
-    source file for filtering_source, already downloaded and staged by
-    Nextflow."""
     if filtering_source != "null" and custom_expression_file != "null":
         raise ValueError(
             "Specify either --filtering_source or --custom_expression_file, not both"
@@ -85,11 +83,8 @@ def resolve_expression_file(
         df["id"] = df["id"].apply(lambda x: x.split(".")[0])
         return df, f"https://gtexportal.org/home/tissue/{context}"
     elif filtering_source == "PAXDB":
-        # the first line of the file holds the PaxDB dataset id, e.g. "#id: 4032974247"
         first_line = Path(filtering_file).read_text().splitlines()[0]
         dataset_id = first_line.split(":", 1)[1].strip()
-        # the column header itself is also '#'-prefixed in PaxDB files, so it
-        # gets dropped as a comment too; supply the column names explicitly
         df = pd.read_csv(
             filtering_file,
             sep="\t",
@@ -109,22 +104,14 @@ def resolve_expression_file(
         df.rename(columns={df.columns[0]: "id"}, inplace=True)
         df["id"] = df["id"].apply(lambda x: x.split(".")[0])
         sample_columns = df.columns.drop("id")
-        # values are log2(tpm+1) transformed; undo that before taking the median
-        # so it is computed on the same TPM scale as GTEx
+        #converts the value back to the tpm space 
         tpm = 2 ** df[sample_columns] - 1
         df["expression"] = tpm.median(axis=1)
         df = df[["id", "expression"]]
         return df, None
     elif filtering_source == "CRAPome":
-        # pass engine explicitly since the file staged by Nextflow may not
-        # keep the .xlsx extension (the source URL has a query string)
         raw = pd.read_excel(filtering_file, sheet_name="Sheet1", engine="openpyxl")
-        # CC* columns hold the per-experiment spectral counts observed in
-        # control (contaminant-background) AP-MS runs; a protein is
-        # considered "detected" in an experiment if its spectral count there
-        # is greater than zero. The filtering criterion is the fraction of
-        # control experiments it was detected in (0-1), not the total
-        # spectral count, so the threshold reads as a percentage of experiments
+        #calculate the detection rate for filtering 
         cc_columns = [col for col in raw.columns if col.startswith("CC")]
         raw["expression"] = (raw[cc_columns].fillna(0) > 0).sum(axis=1) / len(
             cc_columns
@@ -133,9 +120,6 @@ def resolve_expression_file(
             "geneSymbol", as_index=False
         ).agg({"expression": "sum"})
         df = df.rename(columns={"geneSymbol": "id"})
-        # convert to ensembl gene ids here so the returned "id" column matches
-        # the same contract as the other sources (native ensembl gene ids,
-        # further converted downstream by convert_id_space if needed)
         df = convert_id_space(df, "ensembl", source_space="symbol")
         return df, "https://reprint-apms.org/"
     elif filtering_source == "ProteomicsDB":
@@ -155,9 +139,6 @@ ID_SPACE_TARGET_NAMESPACES = {
 
 
 def convert_id_space(expression_df, id_space, source_space="ensembl"):
-    """Converts the "id" column of expression_df, which is assumed to hold
-    identifiers in source_space, to id_space. If both spaces are the same, no
-    conversion is needed and expression_df is returned unchanged."""
     if id_space == source_space:
         return expression_df
     ids = expression_df["id"]
@@ -285,8 +266,8 @@ def filter_network(
     # CRAPome scores are contaminant/false-positive likelihoods rather than
     # expression levels, so proteins are kept below the threshold instead of
     # above it.
-    is_crapome = source == "CRAPome"
-    if is_crapome:
+    filter_crapome = source == "CRAPome"
+    if filter_crapome:
         keep_mask = in_network_expression["expression"] < threshold
     else:
         keep_mask = in_network_expression["expression"] > threshold
@@ -302,11 +283,7 @@ def filter_network(
     # filter network by context specific expression
     network.vp["context_filter"] = network.new_vertex_property("bool")
     network.vp["expression_in_context"] = network.new_vertex_property("double")
-    if is_crapome:
-        # Contaminant sources (CRAPome) only list a small number of proteins.
-        # Absence from the source means "not a known contaminant", so those
-        # nodes must be kept. Only the in-network nodes that fail the threshold
-        # (the actual contaminants) should be removed; everything else stays.
+    if filter_crapome:
         network.vp["context_filter"].a = True
         contaminant_vertex_ids = (
             set(in_network_expression["vertex_id"].unique())
@@ -332,7 +309,7 @@ def filter_network(
     network.clear_filters()
     del network.vp["context_filter"]
     
-    if is_crapome:
+    if filter_crapome:
         n_genes_in_context = (expression_by_context["expression"] < threshold).sum()
     else:
         n_genes_in_context = (expression_by_context["expression"] > threshold).sum()
